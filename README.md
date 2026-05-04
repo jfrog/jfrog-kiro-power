@@ -123,3 +123,8 @@ If you edit files in this repository, changes don't apply automatically. To relo
 1. Open the Powers panel in Kiro
 2. Find the JFrog power in Installed Powers
 3. Click **Check for Updates** → **Install Updates**
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
+
