@@ -1,4 +1,4 @@
-# Kiro JFrog Power POC
+# JFrog Kiro Power
 
 This repository has the JFrog [Kiro Power](https://kiro.dev/powers/) sources.
 
