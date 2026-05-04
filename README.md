@@ -60,7 +60,15 @@ jf config use <server-id>
 
 Generate a token from: `https://<your-platform>/ui/admin/configuration/security/access_tokens`
 
-### 4. Install the power in Kiro
+### 4. Enable MCP in Kiro
+
+MCP support must be enabled in Kiro before the JFrog MCP server can connect.
+
+1. Open Kiro Settings (`Cmd+,` on macOS / `Ctrl+,` on Linux/Windows)
+2. Search for **MCP** and enable the **Model Context Protocol** setting
+3. Restart Kiro if prompted
+
+### 5. Install the power in Kiro
 
 1. Open Kiro and click the **Powers** icon in the sidebar
 2. Click **Add Custom Power**
