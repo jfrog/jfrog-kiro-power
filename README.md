@@ -124,6 +124,10 @@ If you edit files in this repository, changes don't apply automatically. To relo
 2. Find the JFrog power in Installed Powers
 3. Click **Check for Updates** → **Install Updates**
 
+## Contributing
+
+Contributions are welcome! Please file issues or submit pull requests on the GitHub repository.
+
 ## License and Support
 
 - This project is licensed under the [Apache License 2.0](LICENSE).
