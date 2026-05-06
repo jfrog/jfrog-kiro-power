@@ -49,6 +49,8 @@ curl -fL https://install-cli.jfrog.io | sh
 
 Configure it for your JFrog instance:
 
+> **Note:** `<server-id>` is a unique name you choose to identify this JFrog instance locally (e.g. `my-jfrog` or `acme-platform`). It is only used by the CLI to reference this configuration — it does not need to match anything on the JFrog Platform.
+
 ```bash
 jf config add <server-id> \
   --url=https://YOUR_JFROG_PLATFORM_URL \
@@ -80,6 +82,8 @@ MCP support must be enabled in Kiro before the JFrog MCP server can connect.
 5. Click **Add**
 
 The power will appear in your Installed Powers list.
+
+> **Note:** If the JFrog MCP server does not appear after installing the power, a full Kiro restart is required. Close and reopen Kiro completely — a simple reload is not always sufficient.
 
 ## Authentication
 
