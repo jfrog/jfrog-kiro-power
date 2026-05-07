@@ -130,7 +130,7 @@ If you edit files in this repository, changes don't apply automatically. To relo
 
 ## Contributing
 
-Contributions are welcome! Please file issues or submit pull requests on the GitHub repository.
+Contributions are welcome! See [CONTRIBUTING](CONTRIBUTING.md) for details.
 
 ## License and Support
 

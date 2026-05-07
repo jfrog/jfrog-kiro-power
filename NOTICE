@@ -1,0 +1,13 @@
+JFrog Kiro Power
+Copyright (c) JFrog Ltd. 2026
+
+This product includes software developed at JFrog Ltd.
+
+Third-party notices
+-------------------
+As of this notice, this repository does not ship/bundle third-party source code or vendored dependencies.
+It may interoperate with external tools and services (for example: the JFrog Platform, JFrog CLI, and curl),
+which are obtained and licensed separately by their respective owners.
+
+If third-party code or dependencies are added to this repository in the future, their required attributions
+(license, homepage, and copyright notice) must be listed in this file.
