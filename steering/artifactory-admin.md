@@ -8,6 +8,8 @@ Users, groups, and project membership have no MCP tools — always use `jf api` 
 
 **Never pipe `jf api` directly to `jq`** — save the response to a file first, then parse. Use `$$` in filenames and echo the expanded path so it can be reused across shell calls.
 
+**Always run shell commands via a script file** — write commands to a `.sh` file using `fs_write` under `./temp/`, then execute with `bash ./temp/script.sh`. Inline commands passed to `execute_bash` can produce garbled terminal echo output. `/tmp` is not writable by `fs_write` — always use `./temp/` inside the workspace (it is git-ignored). Delete the script file after use.
+
 ---
 
 ## Projects

@@ -249,6 +249,38 @@ Any operation that deletes a JFrog object (project, repository, user, group, art
 
 **Never** use `USERNAME` as a shell variable — it is a reserved OS environment variable on macOS and Linux. Use `JFROG_USER_NAME` or `UNAME` instead.
 
+## Shell Execution — Script File Pattern
+
+When running `jf api` or any multi-line shell logic via an AI tool's `execute_bash` (or equivalent), **always write commands to a script file and execute that file** rather than passing commands inline.
+
+Inline commands fed to a shell via stdin can trigger terminal echo artifacts — each character is echoed back as if typed interactively, producing garbled output that is hard to parse. Running a script file avoids this entirely because the shell reads from a file descriptor, not stdin.
+
+### Pattern
+
+```bash
+# 1. Write the script to the workspace temp directory
+cat > ./temp/jf-script.sh << 'SCRIPT'
+#!/bin/bash
+OUT=/tmp/jf-result-$$.json
+jf api /artifactory/api/repositories > "$OUT" 2>/dev/null
+echo "exit: $?"
+echo "file: $OUT"
+cat "$OUT"
+SCRIPT
+
+# 2. Execute it
+bash ./temp/jf-script.sh
+
+# 3. Clean up
+rm ./temp/jf-script.sh
+```
+
+Use the `fs_write` tool to create the script file under `./temp/`, then `execute_bash` to run it with `bash ./temp/script.sh`.
+
+> **Note:** `/tmp` is not accessible to `fs_write` in Kiro — always write scripts to `./temp/` inside the workspace directory. The `temp/` directory is git-ignored.
+
+---
+
 ## Gotchas
 
 - **Never pipe `jf api` directly to `jq`** — save the response to a file first (see Safe response pattern above).
@@ -261,6 +293,7 @@ Any operation that deletes a JFrog object (project, repository, user, group, art
 - **401 on `jf api`** — the configured token may have expired. Ask the user to re-run `jf config add` with a new token for the same server. Do not try a different server.
 - **403 on `jf api`** — the token lacks required permissions. If the response body is HTML, it may be rate limiting — add `sleep 1` between calls.
 - **409 Conflict** — resource already exists. Safe to treat as success for idempotent create operations.
+- **Xray `/summary/artifact` path format** — the path-based form of this API silently returns empty results when artifact paths contain a leading `./` (as returned by AQL when files are at the repo root). Always use the **checksum-based** form instead: fetch the SHA256 from the Storage API (`/artifactory/api/storage/<repo>/<file>`) and pass `{"checksums": ["<sha256>"]}` to `/xray/api/v1/summary/artifact`.
 
 ## Troubleshooting
 

@@ -6,6 +6,8 @@ Workflows for searching artifacts, users, groups, and projects on the JFrog Plat
 
 **Never use `jf rt search`** — it generates unscoped AQL internally and can time out on large instances. Always use a direct AQL query via `jf api /artifactory/api/search/aql` or the `execute_aql_query` MCP tool.
 
+**Always run shell commands via a script file** — write commands to a `.sh` file using `fs_write` under `./temp/`, then execute with `bash ./temp/script.sh`. Inline commands passed to `execute_bash` can produce garbled terminal echo output. `/tmp` is not writable by `fs_write` — always use `./temp/` inside the workspace (it is git-ignored). Delete the script file after use.
+
 ---
 
 ## Searching Artifacts
