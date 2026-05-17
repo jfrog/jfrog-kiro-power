@@ -14,28 +14,7 @@ The power uses three layers, in priority order:
 
 ## Installing
 
-### 1. Clone this repository
-
-```bash
-git clone <this-repo-url>
-cd <repo-folder>
-```
-
-### 2. Update the MCP server URL
-
-Edit `powers/jfrog/mcp.json` and set your JFrog Platform URL:
-
-```json
-{
-  "mcpServers": {
-    "jfrog": {
-      "url": "https://YOUR_JFROG_PLATFORM_URL/mcp"
-    }
-  }
-}
-```
-
-### 3. Install the JFrog CLI (v2.100.0+)
+### 1. Install the JFrog CLI (v2.100.0+)
 
 The JFrog CLI is used for all REST API calls not covered by MCP tools. It handles authentication automatically via `jf config`, so no `.env` file is needed for day-to-day use.
 
@@ -62,7 +41,7 @@ jf config use <server-id>
 
 Generate a token from: `https://<your-platform>/ui/admin/configuration/security/access_tokens`
 
-### 4. Enable MCP in Kiro
+### 2. Enable MCP in Kiro
 
 MCP support must be enabled in Kiro before the JFrog MCP server can connect.
 
@@ -70,20 +49,39 @@ MCP support must be enabled in Kiro before the JFrog MCP server can connect.
 2. Search for **MCP** and enable the **Model Context Protocol** setting
 3. Restart Kiro if prompted
 
-### 5. Install the power in Kiro
+### 3. Install the power in Kiro
 
 1. Open Kiro and click the **Powers** icon in the sidebar
 2. Click **Add Custom Power**
-3. Select **Local Directory**
-4. Paste the absolute path to the power directory:
+3. Select **Import power from GitHub**
+4. Enter the repository URL:
    ```
-   /path/to/this/repo
+   https://github.com/jfrog/jfrog-kiro-power
    ```
-5. Click **Add**
+5. Hit the **enter** key
 
 The power will appear in your Installed Powers list.
 
 > **Note:** If the JFrog MCP server does not appear after installing the power, a full Kiro restart is required. Close and reopen Kiro completely — a simple reload is not always sufficient.
+
+### 4. Set your JFrog Platform URL
+
+After installation, configure the MCP server URL for your JFrog instance:
+
+1. In the Powers panel, find the **JFrog** power and click it. In the power tab, in the **MCP Configuration**, click **open powers config**
+2. Update the `url` field, replacing `YOUR_JFROG_PLATFORM_URL` with your actual platform hostname:
+
+```json
+{
+  "mcpServers": {
+    "jfrog": {
+      "url": "https://YOUR_JFROG_PLATFORM_URL/mcp"
+    }
+  }
+}
+```
+
+Alternatively, you can use the **Try It** button in the Powers panel to send a test request — Kiro will instruct you to set the URL if it hasn't been configured yet.
 
 ## Authentication
 
@@ -120,12 +118,12 @@ Once installed, open a new agent chat in Kiro and try natural language requests 
 - *"Show me the Xray scan results for this artifact"*
 - *"Upload this jar to libs-release-local"*
 
-### Update after changes
+### Update the power
 
-If you edit files in this repository, changes don't apply automatically. To reload:
+When new versions are published to the GitHub repository, you can pull them in without reinstalling:
 
 1. Open the Powers panel in Kiro
-2. Find the JFrog power in Installed Powers
+2. Find the **JFrog** power in Installed Powers
 3. Click **Check for Updates** → **Install Updates**
 
 ## Contributing
