@@ -328,3 +328,8 @@ Use the `fs_write` tool to create the script file under `./temp/`, then `execute
 - [Access REST APIs](https://docs.jfrog.com/administration/reference)
 - [Xray REST APIs](https://docs.jfrog.com/security/reference)
 - [JFrog Projects](https://docs.jfrog.com/projects/docs/projects)
+
+## License and Support
+
+- This project is licensed under the [Apache License 2.0](LICENSE).
+- Get support by opening an issue in this repository or reaching out to support@jfrog.com.
