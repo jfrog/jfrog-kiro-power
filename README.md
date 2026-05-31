@@ -6,11 +6,13 @@ The power enables AI-assisted workflows on the JFrog Platform — searching arti
 
 ## How it works
 
-The power uses three layers, in priority order:
+The power uses three tiers, in priority order:
 
 1. **JFrog MCP server** — the primary interface. When connected, Kiro uses MCP tools directly for supported operations (no credentials needed beyond the initial OAuth login).
-2. **JFrog CLI (`jf api`)** — complements MCP for operations not covered by MCP tools, and acts as the fallback when MCP is not connected. Auth is handled automatically by `jf config` — no environment variables or `.env` file needed.
-3. **`curl` REST API** — last resort only, when the JFrog CLI is not installed or is below v2.100.0. Requires a `.env` file with credentials.
+2. **JFrog CLI subcommands** — dedicated commands such as `jf rt upload`, `jf rt download`, and `jf rt build-publish` for operations not covered by MCP tools.
+3. **JFrog CLI (`jf api`)** — REST API fallback for calls with no dedicated subcommand. Requires CLI v2.100.0+. Auth is handled automatically by `jf config` — no environment variables or `.env` file needed.
+
+Never use `curl` for JFrog API calls.
 
 ## Installing
 
@@ -93,18 +95,7 @@ The JFrog MCP server uses **OAuth**. No token is needed in `mcp.json` — when K
 
 ### JFrog CLI (secondary — no `.env` needed)
 
-Once `jf config` is set up (step 3 above), the CLI handles auth for all `jf api` calls automatically. No environment variables or `.env` file are required.
-
-### `curl` REST API (last resort)
-
-Only needed when the JFrog CLI is not available or is below v2.100.0. Create a `.env` file in your project root:
-
-```
-JFROG_URL=https://mycompany.jfrog.io
-JFROG_ACCESS_TOKEN=eyJ...
-```
-
-> Keep `.env` out of version control — it's already in `.gitignore`.
+Once `jf config` is set up (step 1 above), the CLI handles auth for all `jf` subcommands and `jf api` calls automatically. No environment variables or `.env` file are required.
 
 ## Testing
 

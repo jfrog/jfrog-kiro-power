@@ -1,7 +1,7 @@
 ---
 name: "JFrog"
 displayName: "JFrog Platform"
-description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects. Uses the JFrog MCP server when connected, and the JFrog CLI (jf api) for operations not covered by MCP or when MCP is unavailable."
+description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects. Uses the JFrog MCP server when connected, JFrog CLI subcommands for artifact and build operations, and jf api as the REST fallback."
 keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management"]
 author: "JFrog"
 ---
@@ -17,9 +17,9 @@ author: "JFrog"
 
 The JFrog Platform is the universal binary management and DevSecOps solution used by developers, DevOps engineers, platform administrators, and security engineers to manage software artifacts across the entire SDLC.
 
-This power enables AI-assisted workflows on the JFrog Platform — searching artifacts, managing repositories, handling users and groups, setting up projects, and querying security metadata. It uses the **JFrog MCP server** when connected, and falls back to the **JFrog CLI `jf api`** (v2.100.0+) for REST API calls not covered by MCP.
+This power enables AI-assisted workflows on the JFrog Platform — searching artifacts, managing repositories, handling users and groups, setting up projects, and querying security metadata. It uses a **three-tier tool strategy**: the **JFrog MCP server** when connected, **`jf` CLI subcommands** for operations with dedicated commands, and **`jf api`** (v2.100.0+) as the REST fallback.
 
-All HTTP traffic to JFrog Platform APIs goes through the `jf` CLI (`jf api`) — no standalone `curl` is required or used for any JFrog interaction.
+All JFrog HTTP traffic from Tiers 2 and 3 goes through the `jf` CLI — no standalone `curl` is required or used for any JFrog interaction.
 
 Current scope: **Artifactory** (users, groups, projects, repositories, artifacts). Xray security metadata is included where available on artifacts.
 
@@ -31,22 +31,33 @@ Current scope: **Artifactory** (users, groups, projects, repositories, artifacts
 
 ## Tool Selection Strategy
 
-Use tools in this priority order:
+Try the tiers in order; move to the next only when the current tier does not cover the operation or fails:
 
-1. **JFrog MCP** — use MCP tools if the server is connected and the operation is covered
-2. **JFrog CLI `jf api`** — for any REST API call not covered by MCP; requires CLI v2.100.0+
+1. **JFrog MCP tools** (preferred) — use MCP tools if the server is connected and the operation is covered. Discover available tools from the connected server's tool list; never guess tool names.
+2. **`jf` CLI subcommands** (fallback) — dedicated commands such as `jf rt upload`, `jf rt download`, `jf rt build-publish`.
+3. **`jf api`** (last resort) — REST API calls with no dedicated subcommand; requires CLI v2.100.0+. Validate the path first — see rule 6 in [Cautious Execution](#cautious-execution).
 
-Never use `curl` for JFrog API calls. The CLI handles auth automatically from `jf config`, avoids exposing tokens in shell commands, and is the only supported fallback.
+Never use `curl` for JFrog API calls. The CLI handles auth automatically from `jf config`, avoids exposing tokens in shell commands, and is the only supported CLI fallback.
 
-When MCP is connected, always check whether a tool exists for the operation before reaching for `jf api`. The MCP server evolves continuously — new tools are added over time, so rely on the live tool list rather than any static reference.
+MCP and the CLI may use different token scopes. If one tier returns 403, try the alternate tier before reporting the operation blocked.
+
+When MCP is connected, always check whether a tool exists for the operation before reaching for CLI subcommands or `jf api`. The MCP server evolves continuously — new tools are added over time, so rely on the live tool list rather than any static reference.
 
 ## Server Selection Rules
 
-Exactly one server must be resolved before any operation. These rules are strict:
+Exactly one server must be resolved before any CLI operation. These rules are strict:
+
+**JFrog MCP and CLI use independent auth.** MCP tools authenticate through the MCP server session (not `jf config`); CLI commands authenticate through `jf config`. If you switch the CLI target server via `jf config use`, the MCP connection still points to its original server. Do not mix MCP and CLI calls targeting different servers in the same session. If the user asks to switch servers, warn that MCP tools will continue to target the original server until the MCP connection is re-established.
 
 1. **User named a specific server** — use that server only. Pass `--server-id <id>` to every `jf` command. Do not touch any other configured server.
 2. **User did not name a server** — use the current default server only. Determine it via `jf config show` (the entry marked as default). If no default is set, stop and ask the user which server to use.
 3. **Verify before executing** — confirm the server exists in `jf config show` before running any command against it.
+
+Pass `--server-id <id>` **after** the subcommand name, not after `jf` itself:
+
+- ✅ `jf api --server-id <id> /artifactory/api/system/version`
+- ✅ `jf rt ping --server-id <id>`
+- ❌ `jf --server-id <id> api /…` — fails with `flag provided but not defined`
 
 If the resolved server produces any error (auth failure, network error, not found), **stop and report the error to the user**. Do not try other configured servers, do not iterate through the server list, and do not silently switch servers.
 
@@ -130,7 +141,7 @@ After replacing, your `mcp.json` should look like:
 
 ## `jf api` Usage
 
-`jf api` is the sole way to call JFrog Platform REST APIs when MCP is not available. It uses credentials from `jf config` — no token in the command line.
+`jf api` is the Tier 3 entry point for JFrog Platform REST APIs when MCP and dedicated CLI subcommands are not available. It uses credentials from `jf config` — no token in the command line.
 
 ### Syntax
 
@@ -233,13 +244,14 @@ Artifactory maintains several system repositories for internal platform metadata
 
 ## Cautious Execution
 
-Do not run commands speculatively. Before executing any JFrog CLI command or API call:
+Do not run commands speculatively. Before executing any JFrog CLI command, MCP tool call, or API call:
 
-1. Confirm the operation is needed to fulfill the user's request
+1. Confirm the operation is needed to fulfill the user's request. If the request is ambiguous or could refer to multiple systems (e.g. "builds" could mean Artifactory build-info or CI/CD pipeline runs), **ask the user for clarification** instead of guessing.
 2. Resolve the target server using the **Server selection rules** above
-3. For mutating operations (create, update, delete, upload), confirm with the user unless the intent is clearly implied
+3. For mutating operations (create, update, delete, upload), confirm with the user unless the intent is clearly implied. This applies to all tiers (MCP tools, CLI commands, and `jf api` with POST/PUT/DELETE).
 4. Prefer read operations first to understand current state before making changes
 5. **Never invent preparatory mutations.** If an operation fails because a precondition is not met (artifact missing, repo doesn't exist), stop and report the gap to the user. Do not perform copy, move, upload, or create-repo to satisfy the precondition unless the user explicitly asks.
+6. **Never guess tool names or API paths.** For MCP tools, confirm the tool exists in the server's tool list. For `jf api` paths, validate against the steering files or [JFrog OpenAPI specifications](https://docs.jfrog.com/integrations/docs/openapi-specifications). On a 404, stop and report — never retry with a guessed alternative path.
 
 ## Destructive Operations
 
@@ -283,15 +295,24 @@ Use the `fs_write` tool to create the script file under `./temp/`, then `execute
 
 ## Gotchas
 
+### MCP tools
+
+- MCP tools return structured data in the tool result. Read response fields directly; do not pipe MCP output through shell commands or `jq`.
+
+### CLI and `jf api`
+
 - **Never pipe `jf api` directly to `jq`** — save the response to a file first (see Safe response pattern above).
 - **`jf api` requires the product prefix** in the path (`/artifactory/...`, `/xray/...`, `/access/...`). Omitting it returns 404.
 - **`jf api` stdout vs stderr** — body goes to stdout, status info goes to stderr. Never use `2>&1 | jq` — stderr corrupts the JSON.
+- **`jf api` has no `-L` (follow redirects) and no `-o` (output file)** — save bodies with shell redirection. For binary downloads through the Artifactory remote proxy, prefer `jf rt download`, which handles cache and redirect semantics natively.
 - **`$$` in filenames** — each shell invocation has a different PID. Always echo the expanded path so it can be reused in subsequent calls.
-- **Remote repo `-cache` suffix** — remote repo artifacts are stored in `<repo-key>-cache`. AQL queries and property operations must target the cache repo, not the remote repo key. The remote key is only for configuration.
+- **Remote repo `-cache` suffix** — remote repo artifacts are stored in `<repo-key>-cache`. AQL queries and property operations must target the cache repo, not the remote repo key. Conversely, `/api/repositories/<key>` only accepts the parent remote key (without `-cache`) — strip the suffix for configuration lookups.
 - **Do not use `jf rt search`** — it generates unscoped AQL internally and can time out on large instances. Always use a direct AQL query via `jf api /artifactory/api/search/aql`.
 - **Unscoped build listing can time out** — never call `GET /artifactory/api/build` without `?project=` or `?buildRepo=` on large instances. See the build info section in `artifactory-artifacts.md`.
+- **`--quiet` is not a global flag** — commands that do not support it (e.g. `jf rt s`, `jf rt ping`) fail with misleading errors. Check `--help` before adding `--quiet`.
+- **Never use interactive CLI commands** — all JFrog CLI operations must be non-interactive. Avoid `jf config add` (without `--interactive=false`), `jf login`, and template wizards; use JSON configs or REST API instead.
 - **401 on `jf api`** — the configured token may have expired. Ask the user to re-run `jf config add` with a new token for the same server. Do not try a different server.
-- **403 on `jf api`** — the token lacks required permissions. If the response body is HTML, it may be rate limiting — add `sleep 1` between calls.
+- **403 on `jf api`** — the token lacks required permissions. If the response body is HTML, it may be rate limiting — add `sleep 1` between calls. If MCP is connected, try the alternate tier before reporting the operation blocked.
 - **409 Conflict** — resource already exists. Safe to treat as success for idempotent create operations.
 - **Xray `/summary/artifact` path format** — the path-based form of this API silently returns empty results when artifact paths contain a leading `./` (as returned by AQL when files are at the repo root). Always use the **checksum-based** form instead: fetch the SHA256 from the Storage API (`/artifactory/api/storage/<repo>/<file>`) and pass `{"checksums": ["<sha256>"]}` to `/xray/api/v1/summary/artifact`.
 
@@ -306,7 +327,7 @@ Use the `fs_write` tool to create the script file under `./temp/`, then `execute
 - Verify the MCP URL is correct: `https://<your-jfrog-server-subdomain>.jfrog.io/mcp`
 - Ensure the JFrog Platform Admin has enabled the MCP server
 - Complete OAuth authorization if prompted
-- Fall back to `jf api` if MCP remains unavailable
+- Fall back to `jf` CLI subcommands or `jf api` if MCP remains unavailable
 
 ### Authentication Failures
 - Ensure the token is a Platform Admin token

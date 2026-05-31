@@ -2,7 +2,7 @@
 
 Workflows for searching artifacts, users, groups, and projects on the JFrog Platform.
 
-**Priority order:** MCP tools → `jf api` (CLI v2.100.0+).
+**Priority order:** MCP tools → `jf` CLI subcommands → `jf api` (CLI v2.100.0+).
 
 **Never use `jf rt search`** — it generates unscoped AQL internally and can time out on large instances. Always use a direct AQL query via `jf api /artifactory/api/search/aql` or the `execute_aql_query` MCP tool.
 

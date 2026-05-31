@@ -2,7 +2,7 @@
 
 Workflows for uploading, downloading, moving, copying, deleting, and querying artifact metadata — including Xray security scan results.
 
-**Priority order:** MCP tools → `jf api` (CLI v2.100.0+).
+**Priority order:** MCP tools → `jf` CLI subcommands → `jf api` (CLI v2.100.0+).
 
 **Never pipe `jf api` directly to `jq`** — save the response to a file first, then parse. Use `$$` in filenames and echo the expanded path so it can be reused across shell calls.
 

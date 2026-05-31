@@ -2,7 +2,7 @@
 
 Workflows for creating and managing projects, repositories, users, groups, and memberships.
 
-**Priority order:** MCP tools → `jf api` (CLI v2.100.0+).
+**Priority order:** MCP tools → `jf` CLI subcommands → `jf api` (CLI v2.100.0+).
 
 Users, groups, and project membership have no MCP tools — always use `jf api` for those.
 
