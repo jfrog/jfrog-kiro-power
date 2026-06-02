@@ -1,5 +1,5 @@
 ---
-name: "JFrog"
+name: "jfrog"
 displayName: "JFrog Platform"
 description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects. Uses the JFrog MCP server when connected, JFrog CLI subcommands for artifact and build operations, and jf api as the REST fallback."
 keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management"]
