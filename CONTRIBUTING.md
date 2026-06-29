@@ -30,19 +30,12 @@ Our GitHub checks will guide you through the signing process on your first pull 
 
 ## Releasing
 
-Releases are automated by `.github/workflows/release.yml`. To cut a release, push (or merge) a commit to `main` whose message contains `[major]`, `[minor]`, or `[patch]`:
+To cut a release:
 
-- `[patch]` — bug fixes; bumps `X.Y.Z` → `X.Y.Z+1`
-- `[minor]` — new features; bumps `X.Y.Z` → `X.Y+1.0`
-- `[major]` — breaking changes; bumps `X.Y.Z` → `X+1.0.0`
+1. In your PR, bump the `VERSION` file to the new version (e.g. `0.1.1`).
+2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` anywhere in the commit message.
 
-The workflow:
-1. Bumps the `VERSION` file
-2. Commits and pushes the bump to `main`
-3. Creates a `vX.Y.Z` git tag
-4. Publishes a GitHub Release with a repo zip attached
-
-**Prerequisite:** `github-actions[bot]` must be allowed to push to `main`. In the repository's branch protection (or ruleset) settings, add `github-actions[bot]` to the bypass list.
+The release workflow then reads `VERSION`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. No bot push to `main` — the version bump is part of the PR itself.
 
 ## Security issues
 
