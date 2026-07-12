@@ -80,45 +80,9 @@ async function main() {
 
     const refsDir = path.join(skillDir, 'references');
     const refs = await listMd(refsDir);
-    const scriptsDir = path.join(skillDir, 'scripts');
-    const hasScripts = (await fs.readdir(scriptsDir).catch(() => [])).length > 0;
 
-    const notes = [];
-    if (refs.length) {
-      notes.push(
-        `> **Load \`#${name}-references\` FIRST** for any search, AQL, repository, \`jf api\` path, login, or ` +
-          `troubleshooting task — it has the exact commands, name/AQL search examples, and error recovery. ` +
-          `Do **not** guess \`jf\` flags or API paths; if a command fails on a flag, load the references ` +
-          `instead of trying variants.`
-      );
-    }
-    if (hasScripts) {
-      notes.push(
-        `> **Helper scripts** for this skill (e.g. login/setup) ship with the optional real Agent Skills ` +
-          `install — see POWER.md → Onboarding. Without them, follow the equivalent steps described above.`
-      );
-    }
-
-    // Base-skill operating quick-rules surfaced in the always-on steering (power guidance, not skill edits)
-    // so the agent doesn't guess before loading the reference bundle.
-    const quickRules =
-      name === 'jfrog'
-        ? [
-            '## Operating quick-rules (read before acting)',
-            '',
-            '- **Search by name:** do not guess CLI flags. Prefer AQL via ' +
-              '`jf api /artifactory/api/search/aql` (load `#jfrog-references` for exact syntax and a ' +
-              'search-by-name example). Avoid `jf rt search` — it builds unscoped AQL and can time out.',
-            '- **Server selection:** if the user did not name a server, use **only** the default ' +
-              '(`jf config show`). Do **not** scan or loop over all servers; ask the user if it is ambiguous.',
-            '- **Auth errors:** on `401` (revoked/expired token), stop and re-authenticate that server ' +
-              '(`jf config add <server-id> --url=... --access-token=<new> --interactive=false`). Do **not** ' +
-              'fall back to other servers.',
-            '- For anything beyond these, load `#jfrog-references`.',
-            '',
-          ]
-        : [];
-
+    // Pure transform: Kiro frontmatter + the SKILL.md body, verbatim. No authored guidance is added —
+    // the skill is the single source of truth; steering is only a rendering of it.
     const main = [
       '---',
       'inclusion: auto',
@@ -127,9 +91,7 @@ async function main() {
       '---',
       GEN,
       '',
-      ...quickRules,
       body.trim(),
-      ...(notes.length ? ['', ...notes] : []),
       '',
     ].join('\n');
     await fs.writeFile(path.join(steeringRoot, `${name}.md`), main, 'utf8');

@@ -92,5 +92,3 @@ the reference files above.
 - **Use the response templates verbatim**: where a reference file gives a "reply
   using this exact template" block, fill the placeholders and send exactly that,
   with the same wording every time and no extra preamble or commentary.
-
-> **Load `#jfrog-ai-catalog-skills-references` FIRST** for any search, AQL, repository, `jf api` path, login, or troubleshooting task — it has the exact commands, name/AQL search examples, and error recovery. Do **not** guess `jf` flags or API paths; if a command fails on a flag, load the references instead of trying variants.
