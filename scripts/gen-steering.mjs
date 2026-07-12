@@ -86,8 +86,10 @@ async function main() {
     const notes = [];
     if (refs.length) {
       notes.push(
-        `> **Deep reference material** for this skill is in the \`#${name}-references\` steering file ` +
-          `(manual inclusion) — load it when you need API paths, schemas, AQL syntax, or detailed workflows.`
+        `> **Load \`#${name}-references\` FIRST** for any search, AQL, repository, \`jf api\` path, login, or ` +
+          `troubleshooting task — it has the exact commands, name/AQL search examples, and error recovery. ` +
+          `Do **not** guess \`jf\` flags or API paths; if a command fails on a flag, load the references ` +
+          `instead of trying variants.`
       );
     }
     if (hasScripts) {
@@ -97,6 +99,26 @@ async function main() {
       );
     }
 
+    // Base-skill operating quick-rules surfaced in the always-on steering (power guidance, not skill edits)
+    // so the agent doesn't guess before loading the reference bundle.
+    const quickRules =
+      name === 'jfrog'
+        ? [
+            '## Operating quick-rules (read before acting)',
+            '',
+            '- **Search by name:** do not guess CLI flags. Prefer AQL via ' +
+              '`jf api /artifactory/api/search/aql` (load `#jfrog-references` for exact syntax and a ' +
+              'search-by-name example). Avoid `jf rt search` — it builds unscoped AQL and can time out.',
+            '- **Server selection:** if the user did not name a server, use **only** the default ' +
+              '(`jf config show`). Do **not** scan or loop over all servers; ask the user if it is ambiguous.',
+            '- **Auth errors:** on `401` (revoked/expired token), stop and re-authenticate that server ' +
+              '(`jf config add <server-id> --url=... --access-token=<new> --interactive=false`). Do **not** ' +
+              'fall back to other servers.',
+            '- For anything beyond these, load `#jfrog-references`.',
+            '',
+          ]
+        : [];
+
     const main = [
       '---',
       'inclusion: auto',
@@ -105,6 +127,7 @@ async function main() {
       '---',
       GEN,
       '',
+      ...quickRules,
       body.trim(),
       ...(notes.length ? ['', ...notes] : []),
       '',
