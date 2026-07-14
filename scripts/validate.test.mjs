@@ -11,9 +11,9 @@ import {
   validateSkillDir,
   validatePower,
   validateSteeringFile,
-  validateAgentConfig,
 } from './validate.mjs';
-import { installAdditive } from './install-cli-agent.mjs';
+import { installAdditive } from './install-cli.mjs';
+import { rewriteRefPointers, assertNoDeadRefPointers } from './gen-steering.mjs';
 
 function writeSkill(root, dir, body) {
   mkdirSync(join(root, dir), { recursive: true });
@@ -89,17 +89,6 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: auto\n---').some((e) => e.includes('description')));
 });
 
-test('validateAgentConfig requires name, description, prompt, and a non-empty tools array', () => {
-  assert.deepEqual(
-    validateAgentConfig({ name: 'jfrog', description: 'd', prompt: 'file://x', tools: ['shell'] }),
-    []
-  );
-  assert.ok(validateAgentConfig({}).some((e) => e.includes('name')));
-  assert.ok(validateAgentConfig({ name: 'jfrog', prompt: 'p', tools: ['shell'] }).some((e) => e.includes('description')));
-  assert.ok(validateAgentConfig({ name: 'jfrog', description: 'd', tools: ['shell'] }).some((e) => e.includes('prompt')));
-  assert.ok(validateAgentConfig({ name: 'jfrog', description: 'd', prompt: 'p', tools: [] }).some((e) => e.includes('tools')));
-});
-
 // The CLI installer's additive copy is the primary path: it must land the vendored skills/ AND the
 // generated steering/ into <dest>, and be idempotent (a re-run yields byte-identical files).
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -135,4 +124,49 @@ test('installAdditive is idempotent (re-run -> byte-identical files)', async () 
 
   assert.equal(snap(join(dest, 'skills', 'jfrog', 'SKILL.md')), skillBefore, 'skill file unchanged on re-run');
   assert.equal(snap(join(dest, 'steering', steerFile)), steerBefore, 'steering file unchanged on re-run');
+});
+
+// gen-steering must render Power-safe steering: on-disk `references/<x>.md` and `scripts/*` pointers
+// don't exist in a Power-only install, so reference pointers are redirected to the bundled
+// `#<name>-references` steering. rewriteRefPointers does that redirect; assertNoDeadRefPointers is the
+// build guard that fails if any reference pointer slips through (e.g. a future skill's new file).
+test('rewriteRefPointers redirects references/<x>.md to the bundled #<name>-references steering', () => {
+  const out = rewriteRefPointers('read `references/artifactory-aql-syntax.md` for AQL', 'jfrog');
+  assert.match(out, /`artifactory-aql-syntax` section of the `#jfrog-references` steering/);
+  assert.doesNotMatch(out, /references\/[a-z0-9._-]+\.md/i, 'no bare references/<x>.md pointer remains');
+});
+
+test('rewriteRefPointers handles <skill_path>/references and the references/*.md glob', () => {
+  assert.doesNotMatch(
+    rewriteRefPointers('see `<skill_path>/references/jfrog-login-flow.md`', 'jfrog'),
+    /references\/[a-z0-9._-]+\.md/i
+  );
+  for (const glob of ['examples in `references/*.md` omit it', 'in the other `references/*` files']) {
+    const out = rewriteRefPointers(glob, 'jfrog');
+    assert.match(out, /`#jfrog-references` steering/);
+    assert.doesNotMatch(out, /references\/\*/, 'the references glob is rewritten');
+  }
+});
+
+test('rewriteRefPointers uses the skill name for the bundle and leaves non-reference text intact', () => {
+  assert.match(
+    rewriteRefPointers('read `references/discovering-skills.md`', 'jfrog-ai-catalog-skills'),
+    /`#jfrog-ai-catalog-skills-references` steering/
+  );
+  const untouched = 'run `jf rt ping` and read the docs at https://example.com/references/guide';
+  assert.equal(rewriteRefPointers(untouched, 'jfrog'), untouched, 'URLs / non-target text are not rewritten');
+});
+
+test('assertNoDeadRefPointers throws on a residual references/<x>.md and passes clean text', () => {
+  assert.throws(
+    () => assertNoDeadRefPointers('jfrog.md', 'stray `references/xray-entities.md` link'),
+    /unrewritten reference pointer/
+  );
+  assert.throws(
+    () => assertNoDeadRefPointers('jfrog.md', 'stray `references/*` dir mention'),
+    /unrewritten reference pointer/
+  );
+  assert.doesNotThrow(() =>
+    assertNoDeadRefPointers('jfrog.md', 'load the `#jfrog-references` steering — all clean here')
+  );
 });

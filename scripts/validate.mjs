@@ -58,16 +58,6 @@ export function validateSteeringFile(name, md) {
   return errors;
 }
 
-// The kiro-cli agent config must be well-formed: name, non-empty description + prompt, tools array.
-export function validateAgentConfig(obj) {
-  const errors = [];
-  if (!obj || typeof obj.name !== 'string' || !obj.name) errors.push('cli-agent: missing "name"');
-  if (!obj?.description) errors.push('cli-agent: missing/empty "description"');
-  if (typeof obj?.prompt !== 'string' || !obj.prompt) errors.push('cli-agent: missing/empty "prompt"');
-  if (!Array.isArray(obj?.tools) || obj.tools.length === 0) errors.push('cli-agent: "tools" must be a non-empty array');
-  return errors;
-}
-
 // POWER.md must carry frontmatter with a name and a non-empty description (Kiro power metadata).
 export function validatePower(md) {
   const errors = [];
@@ -98,11 +88,6 @@ function main() {
   if (steeringFiles.length === 0) errors.push('steering/: no steering files found');
   for (const f of steeringFiles) {
     errors.push(...validateSteeringFile(f, readFileSync(join(steeringRoot, f), 'utf8')));
-  }
-
-  const agentTemplate = join(root, 'cli-agent', 'jfrog.agent.json');
-  if (existsSync(agentTemplate)) {
-    errors.push(...validateAgentConfig(JSON.parse(readFileSync(agentTemplate, 'utf8'))));
   }
 
   if (errors.length) {

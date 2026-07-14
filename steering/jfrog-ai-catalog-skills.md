@@ -17,10 +17,10 @@ Pick the row matching the user's intent and read that reference file.
 
 | Intent | Read |
 |--------|------|
-| "What skills are available?" / browse the catalog / list versions / search by name | [references/discovering-skills.md](references/discovering-skills.md) |
-| Install or update a skill (latest or a pinned version), or a download is blocked | [references/installing-skills.md](references/installing-skills.md) |
-| "What's installed?" / remove an installed skill | [references/managing-installed-skills.md](references/managing-installed-skills.md) |
-| Publish / upload / release a skill to the catalog | [references/publishing-skills.md](references/publishing-skills.md) |
+| "What skills are available?" / browse the catalog / list versions / search by name | [the `discovering-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `discovering-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
+| Install or update a skill (latest or a pinned version), or a download is blocked | [the `installing-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `installing-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
+| "What's installed?" / remove an installed skill | [the `managing-installed-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `managing-installed-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
+| Publish / upload / release a skill to the catalog | [the `publishing-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `publishing-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ Pick the row matching the user's intent and read that reference file.
   required for `--list-skills`, `--list-skill-versions`, and
   `--provision-skills-repository`. Take the value from `JF_PROJECT` or the user,
   then resolve it to a key against the projects list (see *List all projects* in
-  the base `jfrog` skill's [`references/projects-api.md`](../jfrog/references/projects-api.md)):
+  the base `jfrog` skill's [the `projects-api` section of the `#jfrog-ai-catalog-skills-references` steering](../jfrog/the `projects-api` section of the `#jfrog-ai-catalog-skills-references` steering)):
   ```bash
   jf api '/access/api/v1/projects' --server-id "<SID>" \
     | jq -r '.[] | select(.project_key=="<value>" or .display_name=="<value>") | .project_key'
@@ -92,3 +92,5 @@ the reference files above.
 - **Use the response templates verbatim**: where a reference file gives a "reply
   using this exact template" block, fill the placeholders and send exactly that,
   with the same wording every time and no extra preamble or commentary.
+
+> **References:** deep material for this skill ships as the `#jfrog-ai-catalog-skills-references` steering (each former reference file is a `## <file>` section there). Load it on demand.

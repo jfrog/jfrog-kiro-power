@@ -65,6 +65,35 @@ async function listMd(dir) {
   return entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name).sort();
 }
 
+// Redirect in-skill file pointers so the RENDERED steering is self-consistent in a Power-only install,
+// where skills/ (per-file references and scripts) is NOT shipped. Reference files are concatenated into
+// steering/<name>-references.md (each `references/<x>.md` becomes a `## <x>` section there), so pointers
+// are redirected to that bundle. Deterministic string transform — no LLM, and skills/ is never edited.
+// (JFrog skill content only ever writes `references/<file>.md` / `references/*.md`, never inside URLs.)
+export function rewriteRefPointers(text, name) {
+  return text
+    // `references/<x>.md`, `<skill_path>/references/<x>.md`  ->  the concatenated section in the bundle
+    .replace(/`?(?:<skill_path>\/)?references\/([a-z0-9._-]+)\.md`?/gi,
+      (_m, base) => `the \`${base}\` section of the \`#${name}-references\` steering`)
+    // backticked references-dir / glob mentions: `<skill_path>/references/`, `references/`, `references/*`,
+    // `references/*.md`. Require the backticks so a `references/` inside a URL/path is left untouched.
+    .replace(/`(?:<skill_path>\/)?references\/(?:\*(?:\.md)?)?`/gi, `the \`#${name}-references\` steering`);
+}
+
+// Build guard: after rewriting, no on-disk `references/<x>.md` pointer may survive in a generated file
+// (it would be a dead link in a Power-only install). Throws so a future skill introducing an unmatched
+// pointer shape fails the build loudly instead of shipping broken steering.
+export function assertNoDeadRefPointers(fileName, text) {
+  // Catch both a specific file pointer (references/<x>.md) and any backticked `…references/…` mention
+  // (dir or glob). URLs/prose without backticks are ignored — skill content never puts references/ in a URL.
+  const m = text.match(/references\/[a-z0-9._-]+\.md/i) || text.match(/`[^`\n]*references\/[^`\n]*`/i);
+  if (m) {
+    throw new Error(
+      `steering/${fileName}: unrewritten reference pointer "${m[0]}" — extend rewriteRefPointers() in gen-steering.mjs`
+    );
+  }
+}
+
 async function main() {
   const skills = await listDirs(skillsRoot);
   if (skills.length === 0) throw new Error(`no skills found under ${skillsRoot}`);
@@ -80,10 +109,31 @@ async function main() {
 
     const refsDir = path.join(skillDir, 'references');
     const refs = await listMd(refsDir);
+    const scriptsDir = path.join(skillDir, 'scripts');
+    const hasScripts = (await fs.readdir(scriptsDir).catch(() => [])).length > 0;
 
-    // Pure transform: Kiro frontmatter + the SKILL.md body, verbatim. No authored guidance is added —
-    // the skill is the single source of truth; steering is only a rendering of it.
-    const main = [
+    // Transform, don't fork: render the SKILL.md body but redirect the in-skill file pointers to what
+    // the Power actually ships (bundled references steering), so a Power-only install has no dead links.
+    const renderedBody = rewriteRefPointers(body.trim(), name);
+
+    // Signpost the two things a Power cannot carry: per-file references (→ bundled steering) and helper
+    // scripts (→ only present via the optional skills install). Data-driven, so future skills get them too.
+    const notes = [];
+    if (refs.length) {
+      notes.push(
+        `> **References:** deep material for this skill ships as the \`#${name}-references\` steering ` +
+          `(each former reference file is a \`## <file>\` section there). Load it on demand.`
+      );
+    }
+    if (hasScripts) {
+      notes.push(
+        `> **Helper scripts** (\`scripts/*\`) are installed into \`~/.kiro/skills/\` during onboarding ` +
+          `(see POWER.md → Onboarding), or by the CLI install. If they are not present (install skipped ` +
+          `or offline), perform the equivalent steps manually.`
+      );
+    }
+
+    const mainDoc = [
       '---',
       'inclusion: auto',
       `name: ${name}`,
@@ -91,10 +141,12 @@ async function main() {
       '---',
       GEN,
       '',
-      body.trim(),
+      renderedBody,
+      ...(notes.length ? ['', ...notes] : []),
       '',
     ].join('\n');
-    await fs.writeFile(path.join(steeringRoot, `${name}.md`), main, 'utf8');
+    assertNoDeadRefPointers(`${name}.md`, mainDoc);
+    await fs.writeFile(path.join(steeringRoot, `${name}.md`), mainDoc, 'utf8');
     console.log(`  steering/${name}.md`);
 
     if (refs.length) {
@@ -109,12 +161,19 @@ async function main() {
       ];
       for (const r of refs) {
         const content = await fs.readFile(path.join(refsDir, r), 'utf8');
-        parts.push(`\n## ${r.replace(/\.md$/, '')}\n`, content.trim(), '');
+        // Rewrite cross-references between reference files too, so the bundle is internally consistent.
+        parts.push(`\n## ${r.replace(/\.md$/, '')}\n`, rewriteRefPointers(content.trim(), name), '');
       }
-      await fs.writeFile(path.join(steeringRoot, `${name}-references.md`), parts.join('\n'), 'utf8');
+      const refsDoc = parts.join('\n');
+      assertNoDeadRefPointers(`${name}-references.md`, refsDoc);
+      await fs.writeFile(path.join(steeringRoot, `${name}-references.md`), refsDoc, 'utf8');
       console.log(`  steering/${name}-references.md  (${refs.length} refs)`);
     }
   }
   console.log('done.');
 }
-await main();
+
+// Only run when executed directly (not when imported by tests).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

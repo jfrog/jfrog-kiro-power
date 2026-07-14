@@ -96,7 +96,7 @@ jf api /artifactory/api/system/version
 ```
 
 Do **not** repeat the assignment per `jf` call (`JFROG_CLI_USER_AGENT='<UA>' jf …`
-on every line). Examples elsewhere in this skill and in `references/*.md`
+on every line). Examples elsewhere in this skill and in the `#jfrog-references` steering
 omit the export for readability — the rule is global. When launching a
 subagent, pass `<UA>` in its prompt; subagents do not re-run the script.
 
@@ -108,7 +108,7 @@ subagent, pass `<UA>` in its prompt; subagents do not re-run the script.
 | 3 | `jf` below minimum version — Tiers 2 and 3 unavailable; only MCP (Tier 1) remains |
 
 Exit 2 or 3 is not a fatal error. Attempt to install or upgrade the CLI
-(see `references/jfrog-cli-install-upgrade.md`). If installation succeeds,
+(see the `jfrog-cli-install-upgrade` section of the `#jfrog-references` steering). If installation succeeds,
 re-run the environment check. If installation is not possible (no permissions,
 restricted environment), proceed with MCP (Tier 1) only. Both `jf` CLI commands
 (Tier 2) and `jf api` (Tier 3) require a working `jf` installation.
@@ -125,7 +125,7 @@ or temp directory. Use it **only** for these two artifacts:
 1. **`jfrog-skill-state.json`** — written by `scripts/check-environment.sh`
    (24-hour CLI check cache).
 2. **`onemodel-schema-${JFROG_SERVER_ID}.graphql`** — cached OneModel supergraph
-   schema (see `references/onemodel-graphql.md`).
+   schema (see the `onemodel-graphql` section of the `#jfrog-references` steering).
 
 **Do not** save HTTP response bodies, GraphQL query results, ad-hoc JSON, reports,
 or any other temporary files under `skills-cache/`. Write those to a host temp
@@ -160,7 +160,7 @@ MCP tool call, or API call:
    re-indexing, or permission propagation.
 6. **Never guess tool names or API paths.** For MCP tools, confirm the tool
    exists in the server's tool list. For `jf api` paths, validate against
-   `<skill_path>/references/` (or
+   the `#jfrog-references` steering (or
    [JFrog OpenAPI specifications](https://docs.jfrog.com/integrations/docs/openapi-specifications)
    if you have web access). On a 404, stop and report — never retry with a guessed
    alternative path.
@@ -204,10 +204,10 @@ Pass `--server-id <SID>` to every subsequent `jf` call. The flag goes
 - ❌ `jf --server-id <SID> api /…` — fails with `flag provided but not defined`
 
 When launching a subagent, pass `<SID>` in its prompt — subagents do not
-re-resolve. Examples elsewhere in this skill and in `references/*.md` omit
+re-resolve. Examples elsewhere in this skill and in the `#jfrog-references` steering omit
 `--server-id` for readability; the rule is global, same as
 `JFROG_CLI_USER_AGENT`. To add a new server, read
-`references/jfrog-login-flow.md`.
+the `jfrog-login-flow` section of the `#jfrog-references` steering.
 
 ### On any error, stop — never switch
 
@@ -228,57 +228,57 @@ below.
 
 ### Cross-domain
 
-- **Disambiguating a JFrog entity, understanding entity types, or planning operations that span multiple products**: read `references/jfrog-entity-index.md`, then follow pointers to the relevant domain file
-- **Looking up documentation URLs**: read `references/jfrog-url-references.md`
+- **Disambiguating a JFrog entity, understanding entity types, or planning operations that span multiple products**: read the `jfrog-entity-index` section of the `#jfrog-references` steering, then follow pointers to the relevant domain file
+- **Looking up documentation URLs**: read the `jfrog-url-references` section of the `#jfrog-references` steering
 
 ### Artifactory
 
-- **Repository types, artifacts, builds, properties, or permission targets (concepts)**: read `references/artifactory-entities.md` (~220 lines)
-- **Stored packages, package versions, version locations, or the metadata layer over Artifactory (concepts)**: read `references/stored-packages-entities.md` (~165 lines)
-- **Repo, file, build, permission, user/group, or replication operations**: if the JFrog MCP server exposes a tool for the operation, prefer it. For CLI/API fallback, read `references/artifactory-operations.md` (for **listing builds** use AQL with `limit`/`offset` — see § *Listing build names*; for **full build detail** use `GET /api/build/<name>/<number>?project=` — see § *Retrieving full build info*)
-- **AQL queries**: read `references/artifactory-aql-syntax.md` (~585 lines)
-- **Artifactory REST beyond the CLI, structured JSON templates (replacing interactive wizards), or any Artifactory API gap**: read `references/artifactory-api-gaps.md` (~220 lines)
+- **Repository types, artifacts, builds, properties, or permission targets (concepts)**: read the `artifactory-entities` section of the `#jfrog-references` steering (~220 lines)
+- **Stored packages, package versions, version locations, or the metadata layer over Artifactory (concepts)**: read the `stored-packages-entities` section of the `#jfrog-references` steering (~165 lines)
+- **Repo, file, build, permission, user/group, or replication operations**: if the JFrog MCP server exposes a tool for the operation, prefer it. For CLI/API fallback, read the `artifactory-operations` section of the `#jfrog-references` steering (for **listing builds** use AQL with `limit`/`offset` — see § *Listing build names*; for **full build detail** use `GET /api/build/<name>/<number>?project=` — see § *Retrieving full build info*)
+- **AQL queries**: read the `artifactory-aql-syntax` section of the `#jfrog-references` steering (~585 lines)
+- **Artifactory REST beyond the CLI, structured JSON templates (replacing interactive wizards), or any Artifactory API gap**: read the `artifactory-api-gaps` section of the `#jfrog-references` steering (~220 lines)
 
 ### Xray & security
 
-- **Watches, policies, violations, components, or vulnerability scanning (concepts)**: read `references/xray-entities.md` (~290 lines)
-- **Exposures scanning results (secrets, IaC, service misconfigurations, application security risks)**: read `references/xray-entities.md` § Exposures (Advanced Security)
-- **Curation audit events (approved/blocked packages, dry-run policy evaluations, curation export)**: read `references/xray-entities.md` § Curation audit events
+- **Watches, policies, violations, components, or vulnerability scanning (concepts)**: read the `xray-entities` section of the `#jfrog-references` steering (~290 lines)
+- **Exposures scanning results (secrets, IaC, service misconfigurations, application security risks)**: read the `xray-entities` section of the `#jfrog-references` steering § Exposures (Advanced Security)
+- **Curation audit events (approved/blocked packages, dry-run policy evaluations, curation export)**: read the `xray-entities` section of the `#jfrog-references` steering § Curation audit events
 
 ### Release lifecycle & distribution
 
-- **Release bundles, lifecycle stages, distribution, or evidence (concepts)**: read `references/release-lifecycle-entities.md` (~180 lines)
-- **Applications, application versions, releasables, promotions, or AppTrust (concepts)**: read `references/apptrust-entities.md` (~155 lines)
+- **Release bundles, lifecycle stages, distribution, or evidence (concepts)**: read the `release-lifecycle-entities` section of the `#jfrog-references` steering (~180 lines)
+- **Applications, application versions, releasables, promotions, or AppTrust (concepts)**: read the `apptrust-entities` section of the `#jfrog-references` steering (~155 lines)
 
 ### Catalog
 
-- **Public or custom catalog, package metadata, vulnerability advisories, licenses, OpenSSF, or MCP services (concepts)**: if the JFrog MCP server exposes a catalog tool, prefer it for single-package lookups. For deeper queries, read `references/catalog-entities.md` (~190 lines)
-- **CVE details, vulnerability lookup by CVE ID, or severity/affected-packages/fix-versions for a specific CVE**: prefer an MCP vulnerability-lookup tool if the JFrog MCP server exposes one. Otherwise read `references/onemodel-query-examples.md` § *Public security domain* for the `searchVulnerabilities` query shape — this is self-contained; do not load the `jfrog-package-safety-and-download` skill for pure CVE lookups
+- **Public or custom catalog, package metadata, vulnerability advisories, licenses, OpenSSF, or MCP services (concepts)**: if the JFrog MCP server exposes a catalog tool, prefer it for single-package lookups. For deeper queries, read the `catalog-entities` section of the `#jfrog-references` steering (~190 lines)
+- **CVE details, vulnerability lookup by CVE ID, or severity/affected-packages/fix-versions for a specific CVE**: prefer an MCP vulnerability-lookup tool if the JFrog MCP server exposes one. Otherwise read the `onemodel-query-examples` section of the `#jfrog-references` steering § *Public security domain* for the `searchVulnerabilities` query shape — this is self-contained; do not load the `jfrog-package-safety-and-download` skill for pure CVE lookups
 
 ### OneModel (GraphQL)
 
-- **GraphQL queries** (applications, packages, evidence, release bundles, catalog, cross-domain, or "list/search my" platform entities): read `references/onemodel-graphql.md` (~325 lines)
-- **Query templates and domain-specific examples**: read `references/onemodel-query-examples.md` (~555 lines)
-- **Pagination, filtering, GraphQL variables, or date formatting**: read `references/onemodel-common-patterns.md` (~280 lines)
+- **GraphQL queries** (applications, packages, evidence, release bundles, catalog, cross-domain, or "list/search my" platform entities): read the `onemodel-graphql` section of the `#jfrog-references` steering (~325 lines)
+- **Query templates and domain-specific examples**: read the `onemodel-query-examples` section of the `#jfrog-references` steering (~555 lines)
+- **Pagination, filtering, GraphQL variables, or date formatting**: read the `onemodel-common-patterns` section of the `#jfrog-references` steering (~280 lines)
 
 ### Platform administration
 
-- **Platform structure, project/repo membership, or project roles vs environments (concepts)**: read `references/platform-access-entities.md`
-- **Access tokens, stats, projects, or system health**: read `references/platform-admin-operations.md`
-- **Managing JFrog Projects, members, or environments**: read `references/projects-api.md` (~260 lines)
-- **Platform REST beyond the CLI, or any platform-level API gap**: read `references/platform-admin-api-gaps.md` (~180 lines)
+- **Platform structure, project/repo membership, or project roles vs environments (concepts)**: read the `platform-access-entities` section of the `#jfrog-references` steering
+- **Access tokens, stats, projects, or system health**: read the `platform-admin-operations` section of the `#jfrog-references` steering
+- **Managing JFrog Projects, members, or environments**: read the `projects-api` section of the `#jfrog-references` steering (~260 lines)
+- **Platform REST beyond the CLI, or any platform-level API gap**: read the `platform-admin-api-gaps` section of the `#jfrog-references` steering (~180 lines)
 
 ### CLI setup & authentication
 
-- **Adding a server or logging in**: read `references/jfrog-login-flow.md` (~130 lines)
-- **CLI not installed, upgrade needed, or `jq` unavailable**: read `references/jfrog-cli-install-upgrade.md`
+- **Adding a server or logging in**: read the `jfrog-login-flow` section of the `#jfrog-references` steering (~130 lines)
+- **CLI not installed, upgrade needed, or `jq` unavailable**: read the `jfrog-cli-install-upgrade` section of the `#jfrog-references` steering
 
 ### General patterns
 
-- **Batching, parallel Shell calls, or launching subagents**: read `references/general-parallel-execution.md` (~135 lines)
-- **Large or parallel data gathering, list-vs-detail APIs, cache hygiene**: read `references/general-bulk-operations-and-agent-patterns.md`
-- **Standalone HTML report with JFrog-aligned styling**: read `references/jfrog-brand-html-report.md`
-- **Reusable gotchas from past tasks**: read or extend `references/general-use-case-hints.md`
+- **Batching, parallel Shell calls, or launching subagents**: read the `general-parallel-execution` section of the `#jfrog-references` steering (~135 lines)
+- **Large or parallel data gathering, list-vs-detail APIs, cache hygiene**: read the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering
+- **Standalone HTML report with JFrog-aligned styling**: read the `jfrog-brand-html-report` section of the `#jfrog-references` steering
+- **Reusable gotchas from past tasks**: read or extend the `general-use-case-hints` section of the `#jfrog-references` steering
 
 ## Command discovery
 
@@ -376,9 +376,9 @@ jq . "$RESPONSE"
 
 Schema discovery: `jf api /onemodel/api/v1/supergraph/schema > "$SCHEMA_FILE"`
 (store only under `~/.jfrog/skills-cache/`, never query responses). Read
-`references/onemodel-graphql.md` for the full workflow (schema fetch,
-validation, pagination, errors), plus `references/onemodel-query-examples.md`
-and `references/onemodel-common-patterns.md` for query shapes, pagination,
+the `onemodel-graphql` section of the `#jfrog-references` steering for the full workflow (schema fetch,
+validation, pagination, errors), plus the `onemodel-query-examples` section of the `#jfrog-references` steering
+and the `onemodel-common-patterns` section of the `#jfrog-references` steering for query shapes, pagination,
 variables, and dates.
 
 ## Structured inputs
@@ -422,7 +422,7 @@ this repo GET, see **Any API gap** under [When to read reference files](#when-to
   (without `-cache`) — strip the suffix for configuration lookups.
 - **Do not use `jf rt search`** — always use a direct AQL query via
   `jf api /artifactory/api/search/aql -X POST -H "Content-Type: text/plain" -d '<aql>'`.
-  See `references/artifactory-aql-syntax.md`.
+  See the `artifactory-aql-syntax` section of the `#jfrog-references` steering.
 - Use `--quiet` flag for non-interactive execution (suppresses confirmation
   prompts). **Caution:** `--quiet` is not a global flag — commands that do not
   support it (e.g. `jf rt s`, `jf rt ping`) will fail with misleading errors
@@ -434,17 +434,17 @@ this repo GET, see **Any API gap** under [When to read reference files](#when-to
 - Never use interactive commands. All JFrog CLI operations must be performed
   non-interactively. Known interactive commands to avoid: `jf config add`,
   `jf login`, `jf rt repo-template`, `jf rt permission-target-template`, and
-  `jf rt replication-template`. For server setup, follow `references/jfrog-login-flow.md`.
+  `jf rt replication-template`. For server setup, follow the `jfrog-login-flow` section of the `#jfrog-references` steering.
   For templates, use JSON schemas or REST API. If a command prompts for input
   unexpectedly, find the non-interactive alternative via `--help` or REST API.
 - `jf config export` output is base64-encoded JSON. Decode with
   `base64 -d | jq` to extract fields.
 - Build info lookups require a scope (`?buildRepo=` or `?project=`) —
-  resolve it before calling the API. See `references/artifactory-operations.md`
+  resolve it before calling the API. See the `artifactory-operations` section of the `#jfrog-references` steering
   §Retrieving build info for the full workflow.
 - If a `jf api` call returns 401, the configured token may have expired or
   been rotated — ask the user to re-run the login flow (see
-  `references/jfrog-login-flow.md`) for the **same** server. If 403, the
+  the `jfrog-login-flow` section of the `#jfrog-references` steering) for the **same** server. If 403, the
   token lacks required permissions. If 404, verify the endpoint path
   (especially the product prefix) and target server version. On any of
   these errors, do not try a different configured server as a workaround —
@@ -454,19 +454,19 @@ this repo GET, see **Any API gap** under [When to read reference files](#when-to
   `applicability_details` (always present with a `result` string). **Use
   `applicability_details[].result` for counts and summaries.** Using the
   top-level `applicability` field for aggregation produces wrong counts because
-  it is null when no scanner exists. See `references/xray-entities.md`
+  it is null when no scanner exists. See the `xray-entities` section of the `#jfrog-references` steering
   §Contextual analysis for the eight possible result values and jq snippets.
 - **OneModel GraphQL:** always fetch the supergraph schema from the **same**
   server you query before building operations (schemas differ by deployment);
-  cache, validate, and execute per `references/onemodel-graphql.md`.
+  cache, validate, and execute per the `onemodel-graphql` section of the `#jfrog-references` steering.
 - Never duplicate a network-fetching command to retry `jq` parsing — save the
   response to a temp file first (see [Preserving command output](#preserving-command-output)).
 - When collecting detail responses in a loop (e.g. per-repo GETs), validate
   each body with `jq -e .` before appending to a results file. One non-JSON
   or empty response corrupts a downstream `jq -s` slurp. Write validated
   lines to an NDJSON file, then `jq -s '.' file.ndjson` to produce the final
-  array. See `references/general-bulk-operations-and-agent-patterns.md`.
-- Accumulated edge cases from real tasks live in `references/general-use-case-hints.md`
+  array. See the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering.
+- Accumulated edge cases from real tasks live in the `general-use-case-hints` section of the `#jfrog-references` steering
   — read when debugging odd failures; **append** a short entry when you confirm
   a new, reusable gotcha.
 
@@ -475,7 +475,7 @@ this repo GET, see **Any API gap** under [When to read reference files](#when-to
 When a task requires multiple independent operations, use the lightest
 parallelism mechanism that fits. Three tiers: (1) batch commands in a single
 Shell call using loops or `&`, (2) issue parallel Shell tool calls, (3) launch
-parallel subagents for large fan-out. Read `references/general-parallel-execution.md`
+parallel subagents for large fan-out. Read the `general-parallel-execution` section of the `#jfrog-references` steering
 (~135 lines) for tier selection, examples, and subagent prompt structuring.
 
 ## Preserving command output
@@ -518,3 +518,6 @@ of re-running the same `jf api` or other identical network-backed command.
 Do **not** reuse saved output across unrelated steps or changed contexts (different
 server, user, or intent). The file is only valid for the immediate sequence of
 operations that motivated the original call.
+
+> **References:** deep material for this skill ships as the `#jfrog-references` steering (each former reference file is a `## <file>` section there). Load it on demand.
+> **Helper scripts** (`scripts/*`) are installed into `~/.kiro/skills/` during onboarding (see POWER.md → Onboarding), or by the CLI install. If they are not present (install skipped or offline), perform the equivalent steps manually.

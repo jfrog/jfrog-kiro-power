@@ -9,8 +9,7 @@
     "sync-skills": "node scripts/sync-skills.mjs",
     "gen-steering": "node scripts/gen-steering.mjs",
     "install-skills": "node scripts/install-skills.mjs",
-    "install-cli": "node scripts/install-cli-agent.mjs",
-    "install-cli-agent": "node scripts/install-cli-agent.mjs",
+    "install-cli": "node scripts/install-cli.mjs",
     "verify-install": "bash scripts/verify-install.sh",
     "validate": "node scripts/validate.mjs",
     "test": "node --test scripts/validate.test.mjs"

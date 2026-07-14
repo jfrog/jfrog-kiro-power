@@ -21,7 +21,7 @@ AppTrust entities are accessed exclusively via the **OneModel GraphQL API**
 (`/onemodel/api/v1/graphql`). There are no CLI commands for this domain.
 
 For the OneModel query workflow (credentials, schema fetch, validation,
-execution), read `references/onemodel-graphql.md`.
+execution), read the `onemodel-graphql` section of the `#jfrog-references` steering.
 
 ## Entity relationship overview
 
@@ -1473,7 +1473,7 @@ Catalog entities are accessed via the **OneModel GraphQL API**
 (`/onemodel/api/v1/graphql`).
 
 For the OneModel query workflow (credentials, schema fetch, validation,
-execution), read `references/onemodel-graphql.md`.
+execution), read the `onemodel-graphql` section of the `#jfrog-references` steering.
 
 ## Two catalog layers
 
@@ -1685,7 +1685,7 @@ These three domains provide different views of package and security data:
 Platform-wide guidance for agents that gather data from multiple JFrog products
 (Artifactory, Xray, Access, Distribution, etc.), run long shell
 sequences, or parallelize work. Product-specific field names and endpoints live
-in the other `references/*` files; this document describes **patterns**, not
+in the other the `#jfrog-references` steering files; this document describes **patterns**, not
 one workflow.
 
 ## List vs detail responses
@@ -1766,11 +1766,11 @@ per-body validation.
 
 ## Where to find product specifics
 
-- Artifactory REST nuances: `references/artifactory-api-gaps.md`
-- Platform admin / Access: `references/platform-admin-api-gaps.md`
-- JFrog Projects (endpoints): `references/projects-api.md`
+- Artifactory REST nuances: the `artifactory-api-gaps` section of the `#jfrog-references` steering
+- Platform admin / Access: the `platform-admin-api-gaps` section of the `#jfrog-references` steering
+- JFrog Projects (endpoints): the `projects-api` section of the `#jfrog-references` steering
 - Joining Artifactory repos to Projects (`projectKey`, roles, environments):
-  `references/platform-access-entities.md`
+  the `platform-access-entities` section of the `#jfrog-references` steering
 - Platform API invocation (all products through `jf api`): see
   `SKILL.md` § *Invoking platform APIs with `jf api`*
 
@@ -1907,7 +1907,7 @@ merges their results into a unified report.
 Do **not** have multiple background processes append **unsynchronized** to the
 same file — lines can interleave and corrupt machine-readable output. Prefer
 sequential writes, one file per worker or chunk then concatenate, or file
-locking. See `references/general-bulk-operations-and-agent-patterns.md`.
+locking. See the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering.
 
 
 ## general-use-case-hints
@@ -2724,7 +2724,7 @@ domain-specific query shapes, read `onemodel-query-examples.md`. For
 pagination, variables, and date formatting, read `onemodel-common-patterns.md`.
 
 In examples below, `<skill_path>` is this skill's directory (parent of
-`references/`).
+the `#jfrog-references` steering).
 
 ## `~/.jfrog/skills-cache/` policy
 
@@ -3075,7 +3075,7 @@ Errors appear in an `errors` array. Partial data may coexist with errors.
 
 | Symptom | Likely cause | Action |
 |--------|---------------|--------|
-| 401 | Invalid or expired token | Re-run the login flow (`references/jfrog-login-flow.md`) for the same server |
+| 401 | Invalid or expired token | Re-run the login flow (the `jfrog-login-flow` section of the `#jfrog-references` steering) for the same server |
 | 403 | Insufficient permissions | User/token lacks access to the resource |
 | `GRAPHQL_VALIDATION_FAILED` | Bad field or argument | Re-check schema |
 | `PARSING_ERROR` / syntax at **line 1, column N** | Invalid document (often extra/missing `}`); common with long `QUERY='...'` one-liners | Reformat in a `.graphql` file or heredoc; verify brace balance; use `jq --rawfile` |
@@ -4214,7 +4214,7 @@ jf api /access/api/v1/environments \
 
 ## Projects
 
-See `references/projects-api.md` for full project CRUD, members, roles, and
+See the `projects-api` section of the `#jfrog-references` steering for full project CRUD, members, roles, and
 environments.
 
 ## Webhooks
@@ -4306,7 +4306,7 @@ Key options: `--groups`, `--scope`, `--expiry`, `--refreshable`, `--description`
 
 ## Login
 
-For login, see `references/jfrog-login-flow.md`.
+For login, see the `jfrog-login-flow` section of the `#jfrog-references` steering.
 
 ## Stats
 
@@ -4340,7 +4340,7 @@ for proj in proj1 proj2 proj3; do
 done
 ```
 
-Read `references/projects-api.md` for detailed endpoint patterns including
+Read the `projects-api` section of the `#jfrog-references` steering for detailed endpoint patterns including
 creating/updating projects, managing members, and assigning repositories.
 
 ## System health
@@ -4355,7 +4355,7 @@ jf api /artifactory/api/system/ping
 
 # JFrog Projects API
 
-**See also:** `references/platform-access-entities.md` for how Projects relate to
+**See also:** the `platform-access-entities` section of the `#jfrog-references` steering for how Projects relate to
 repositories, members, roles, and environments.
 
 Projects are managed through the Access API. There is no CLI subcommand —
@@ -4481,7 +4481,7 @@ Manager, Security Manager, AppTrust Manager, Model Governor, Model Developer.
 
 **Multi-project reports:** Call this endpoint **once per `project_key`**. Custom
 roles and definitions can differ by project; do not assume one project's role
-list matches another. See `references/platform-access-entities.md`.
+list matches another. See the `platform-access-entities` section of the `#jfrog-references` steering.
 
 ### Create a custom role
 
@@ -4502,7 +4502,7 @@ jf api /access/api/v1/projects/<project-key>/roles \
 The product supports **global** and **project-scoped** environment concepts for
 RBAC and resource grouping; see
 [Environments (Administration)](https://docs.jfrog.com/administration/docs/environments)
-and `references/platform-access-entities.md`.
+and the `platform-access-entities` section of the `#jfrog-references` steering.
 
 ### List environments (platform API)
 
@@ -4558,7 +4558,7 @@ jf api "/artifactory/api/repositories?type=remote"
 ```
 
 Returns a lite list with `key`, `type`, `packageType`, and `url` per repo.
-See `references/artifactory-api-gaps.md` for additional filter examples.
+See the `artifactory-api-gaps` section of the `#jfrog-references` steering for additional filter examples.
 
 ### Get repository detail
 
@@ -4717,7 +4717,7 @@ Each artifact within a bundle also has its own `evidenceConnection`, allowing
 per-artifact attestation queries.
 
 For the OneModel query workflow (credentials, schema fetch, validation,
-execution), read `references/onemodel-graphql.md`.
+execution), read the `onemodel-graphql` section of the `#jfrog-references` steering.
 
 Query: `releaseBundleVersion.getReleaseBundleVersion(name: "...", version: "...", ...)`.
 
@@ -4797,7 +4797,7 @@ Stored Packages entities are accessed via the **OneModel GraphQL API**
 (`/onemodel/api/v1/graphql`).
 
 For the OneModel query workflow (credentials, schema fetch, validation,
-execution), read `references/onemodel-graphql.md`.
+execution), read the `onemodel-graphql` section of the `#jfrog-references` steering.
 
 ## Entity relationship overview
 

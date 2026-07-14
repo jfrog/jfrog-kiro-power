@@ -38,6 +38,14 @@ The `auto` files activate when your request matches their description. When you 
 API paths, AQL, schemas), pull the matching `-references` file with `#jfrog-references` /
 `#jfrog-ai-catalog-skills-references`.
 
+> **Scope of the Power.** A Kiro Power itself carries **knowledge only** — `POWER.md` + `mcp.json` +
+> `steering/*.md`, no executables — so the steering above (plus the `#jfrog-references` bundles) is
+> available immediately, and reference material is reachable in the Power (via `#jfrog-references`, not
+> on-disk `references/*.md` files). The skill's **helper scripts** (login/environment-check) and `/`-invoke
+> slash commands cannot ride inside a power; instead [Onboarding](#onboarding) step 2 installs the pinned
+> skills into `~/.kiro/skills/` on first use, so those become available too. If that install is declined
+> or offline, the Power still works on steering knowledge alone.
+
 ## Onboarding
 
 Kiro runs this section automatically the first time the power is used.
@@ -56,17 +64,19 @@ Kiro runs this section automatically the first time the power is used.
    `pwsh scripts/verify-install.ps1` (Windows). If the CLI is missing or too old, see
    [JFrog CLI Setup](#jfrog-cli-setup).
 
-2. **(Optional) Install the real Agent Skills into `.kiro/skills/`.** Only if the user wants the skills
-   in Kiro's skill UI / `/`-invoke (with runnable helper scripts). A Kiro Power does not package a
-   `skills/` folder, so there is no local copy — this step downloads the **same pinned version**
-   (`v0.16.0`, matching the shipped steering) from public GitHub and is the **only** action that touches
-   the network. Ask the user before running it.
+2. **Install the JFrog skills into `~/.kiro/skills/`.** This makes the runnable helper scripts
+   (login/environment-check) and `/`-invoke available on top of the steering. Because a Kiro Power does
+   not package a `skills/` folder, there is no local copy — this step downloads the **same pinned
+   version** (`v0.16.0`, matching the shipped steering) from public GitHub, and is the **only** action
+   that touches the network. **Confirm once with the user, then install globally** (so it's done a single
+   time for all workspaces). If the user declines or is offline, skip it — the steering still provides the
+   full JFrog knowledge; only the helper scripts and `/`-invoke will be unavailable until installed later.
 
    **Preferred — from a checkout of this repo (cross-platform, no external tools):**
 
    ```bash
-   npm run install-skills            # into ./.kiro/skills
-   npm run install-skills -- --global # into ~/.kiro/skills
+   npm run install-skills -- --global   # into ~/.kiro/skills (all workspaces)
+   npm run install-skills               # or into ./.kiro/skills (this workspace only)
    ```
 
    **Without the repo — self-contained, pick your OS:**
@@ -76,7 +86,7 @@ Kiro runs this section automatically the first time the power is used.
    ```bash
    TMP="$(mktemp -d)"
    curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.16.0 | tar -xz -C "$TMP"
-   mkdir -p .kiro/skills && cp -R "$TMP"/jfrog-skills-*/skills/* .kiro/skills/ && rm -rf "$TMP"
+   mkdir -p ~/.kiro/skills && cp -R "$TMP"/jfrog-skills-*/skills/* ~/.kiro/skills/ && rm -rf "$TMP"
    ```
 
    *Windows (PowerShell — uses the `.zip` form + built-in `Expand-Archive`, no `tar` needed):*
@@ -85,11 +95,9 @@ Kiro runs this section automatically the first time the power is used.
    $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
    Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.16.0 -OutFile "$tmp\s.zip"
    Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
-   New-Item -ItemType Directory -Force .kiro\skills | Out-Null
-   Copy-Item "$tmp\jfrog-skills-*\skills\*" .kiro\skills\ -Recurse -Force; Remove-Item $tmp -Recurse -Force
+   New-Item -ItemType Directory -Force $HOME\.kiro\skills | Out-Null
+   Copy-Item "$tmp\jfrog-skills-*\skills\*" $HOME\.kiro\skills\ -Recurse -Force; Remove-Item $tmp -Recurse -Force
    ```
-
-   This is optional — the steering already provides the full JFrog capability without it.
 
 > **Maintainers only:** `scripts/sync-skills.mjs` (re-vendor the embedded skills) and
 > `scripts/gen-steering.mjs` (regenerate `steering/` from them) are build-time tools. They are **not**

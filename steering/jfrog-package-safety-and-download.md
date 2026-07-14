@@ -10,7 +10,7 @@ description: "Check JFrog Public Catalog and stored packages for a version, inte
 ## Prerequisites
 
 - Read `../jfrog/SKILL.md` for JFrog Platform concepts, domain model, CLI setup, and API patterns.
-- **OneModel shapes drift by server version.** Before inventing GraphQL fields or `where` filters, read `../jfrog/references/onemodel-graphql.md` (schema fetch workflow) and `../jfrog/references/onemodel-query-examples.md` (**Public packages**, **Stored packages**). Regenerate or verify queries against `GET "$JFROG_URL/onemodel/api/v1/supergraph/schema"` when examples fail validation.
+- **OneModel shapes drift by server version.** Before inventing GraphQL fields or `where` filters, read `../jfrog/the `onemodel-graphql` section of the `#jfrog-package-safety-and-download-references` steering (schema fetch workflow) and `../jfrog/the `onemodel-query-examples` section of the `#jfrog-package-safety-and-download-references` steering (**Public packages**, **Stored packages**). Regenerate or verify queries against `GET "$JFROG_URL/onemodel/api/v1/supergraph/schema"` when examples fail validation.
 
 ## Workflow overview
 
@@ -56,8 +56,8 @@ Search the **Public Catalog** first via OneModel GraphQL, then fall back to
 **Stored Packages** if not found.
 
 Execute the query through `jf api` as described in
-`../jfrog/references/onemodel-graphql.md`; refer to
-`../jfrog/references/onemodel-query-examples.md` for concrete query shapes.
+`../jfrog/the `onemodel-graphql` section of the `#jfrog-package-safety-and-download-references` steering; refer to
+`../jfrog/the `onemodel-query-examples` section of the `#jfrog-package-safety-and-download-references` steering for concrete query shapes.
 
 **When package type is known** (e.g. `npm`, `maven`, `pypi`), use
 `publicPackages.getPackage(type:, name:)` (see *Get a public package*).
@@ -90,13 +90,13 @@ type they mean.
 ## Step 3: Check if package + latest version exists in JFrog Platform
 
 Query stored package versions using `storedPackages.searchPackageVersions`
-with a `hasPackageWith` filter (see `../jfrog/references/onemodel-query-examples.md`
+with a `hasPackageWith` filter (see `../jfrog/the `onemodel-query-examples` section of the `#jfrog-package-safety-and-download-references` steering
 → *Search stored package versions*). Add a `version` filter for the specific
 version from Step 2, and request `locationsConnection` to get repository
 details (`repositoryKey`, `repositoryType`, `leadArtifactPath`).
 
 Execute the query through `jf api` (see
-`../jfrog/references/onemodel-graphql.md` for the invocation pattern).
+`../jfrog/the `onemodel-graphql` section of the `#jfrog-package-safety-and-download-references` steering for the invocation pattern).
 
 - **Found with locations** → package is in the JFrog Platform. Report as **safe to
   download**. Proceed to Step 4.
