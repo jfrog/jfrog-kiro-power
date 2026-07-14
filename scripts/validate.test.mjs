@@ -10,6 +10,7 @@ import {
   validateSkillDir,
   validatePower,
   validateSteeringFile,
+  validateAgentConfig,
 } from './validate.mjs';
 
 function writeSkill(root, dir, body) {
@@ -84,4 +85,15 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
   assert.ok(validateSteeringFile('x.md', 'no frontmatter').some((e) => e.includes('frontmatter')));
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: bogus\ndescription: d\n---').some((e) => e.includes('inclusion')));
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: auto\n---').some((e) => e.includes('description')));
+});
+
+test('validateAgentConfig requires name, description, prompt, and a non-empty tools array', () => {
+  assert.deepEqual(
+    validateAgentConfig({ name: 'jfrog', description: 'd', prompt: 'file://x', tools: ['shell'] }),
+    []
+  );
+  assert.ok(validateAgentConfig({}).some((e) => e.includes('name')));
+  assert.ok(validateAgentConfig({ name: 'jfrog', prompt: 'p', tools: ['shell'] }).some((e) => e.includes('description')));
+  assert.ok(validateAgentConfig({ name: 'jfrog', description: 'd', tools: ['shell'] }).some((e) => e.includes('prompt')));
+  assert.ok(validateAgentConfig({ name: 'jfrog', description: 'd', prompt: 'p', tools: [] }).some((e) => e.includes('tools')));
 });
