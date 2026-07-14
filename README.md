@@ -4,7 +4,8 @@ This repository holds the JFrog integration for Kiro's **two** surfaces, both dr
 vendored JFrog [Agent Skills](https://kiro.dev/docs/skills/):
 
 - **IDE Power** — for the Kiro **IDE** (Powers panel). Ships `POWER.md` + `steering/`.
-- **CLI Agent** — for **`kiro-cli`** (the terminal agent). Ships a `kiro-cli` agent config.
+- **CLI** — for **`kiro-cli`** (the terminal agent). Installs the JFrog skills + steering into `~/.kiro/`
+  so JFrog composes into any session (additive, like the IDE); an isolated JFrog-only agent is optional.
 
 Both enable AI-assisted JFrog Platform workflows — searching artifacts, managing repositories, handling
 users/groups, setting up projects, checking package safety, and querying security metadata.
@@ -130,46 +131,68 @@ Once installed, open a new agent chat in Kiro and try:
 ## JFrog for the CLI (`kiro-cli`)
 
 `kiro-cli` (the terminal agent) is a **separate runtime** from the IDE — it does not read
-`~/.kiro/powers/`. Its plugin unit is an **agent** config at `~/.kiro/agents/<name>.json`.
+`~/.kiro/powers/`, so it can't consume the IDE power. Its **additive** mechanism is skills
+(`~/.kiro/skills/`) + global steering (`~/.kiro/steering/`): the default agent auto-loads both, so JFrog
+**composes into any session** — the default agent, or your own custom agent (which inherits default
+skills/steering). This mirrors the IDE, where many powers compose in one session.
+
+> **Additive, not a replacement.** A `kiro-cli --agent` is *singular per session*, so we do **not** install
+> JFrog as "the agent" by default — that would replace your own. The install just adds the JFrog skills +
+> steering; an isolated JFrog-only agent is available opt-in (see below).
 
 **Easiest — one command, no checkout:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/align-with-fleet/scripts/bootstrap-cli-agent.sh | bash
-# add --set-default:
-curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/align-with-fleet/scripts/bootstrap-cli-agent.sh | bash -s -- --set-default
 ```
-The bootstrap copies the JFrog skills into `~/.kiro/skills`, writes `~/.kiro/agents/jfrog.json`, and runs
-`kiro-cli agent validate`. Offline/local install: `KIRO_POWER_SRC=<checkout> bash scripts/bootstrap-cli-agent.sh`.
 
 **From a checkout of this repo (equivalent):**
 
 ```bash
-npm run install-cli-agent               # installs the "jfrog" agent (+ copies skills to ~/.kiro/skills)
-npm run install-cli-agent -- --set-default   # also make it kiro-cli's default agent
+npm run install-cli-agent               # additive: skills + steering -> ~/.kiro (global)
+npm run install-cli-agent -- --workspace   # scope into ./.kiro instead
 ```
 
-This copies the embedded skills into `~/.kiro/skills/` (JFrog knowledge + login scripts) and writes
-`~/.kiro/agents/jfrog.json` (rendered from [`cli-agent/jfrog.agent.json`](./cli-agent/jfrog.agent.json)),
-then validates it with `kiro-cli agent validate`.
+Both copy the embedded JFrog skills into `~/.kiro/skills/` (knowledge + login scripts) **and** the JFrog
+steering into `~/.kiro/steering/`. Installs are **idempotent** — re-running produces identical files and
+never touches steering files this repo doesn't own. Offline/local bootstrap:
+`KIRO_POWER_SRC=<checkout> bash scripts/bootstrap-cli-agent.sh`.
 
-Use it:
+Use it — no `--agent` needed:
+
+```bash
+kiro-cli chat            # then just ask a JFrog question ("How many repositories are in Artifactory?")
+```
+
+JFrog work runs through the **`jf` CLI** (never `curl`). For headless/CI runs, trust the shell tool:
+`kiro-cli chat --no-interactive --trust-tools=execute_bash "…"`.
+
+### Optional: an isolated JFrog-only agent
+
+If you want a **governed, JFrog-only** session (its own scoped `jf`/`jq` shell allow-list, isolated from
+your other tools), install the custom agent too:
+
+```bash
+npm run install-cli-agent -- --with-agent      # also writes ~/.kiro/agents/jfrog.json
+npm run install-cli-agent -- --set-default     # implies --with-agent; also make jfrog the default agent
+# bootstrap equivalents: curl … | bash -s -- --with-agent   (or --set-default)
+```
+
+The agent (rendered from [`cli-agent/jfrog.agent.json`](./cli-agent/jfrog.agent.json)) loads the `jfrog`
+skill as its system prompt (+ its `references/` as context). Only `jf`/`jq` auto-run
+(`toolsSettings.shell.allowedCommands`); other shell commands prompt. Use it:
 
 ```bash
 kiro-cli chat --agent jfrog                        # this session
 kiro-cli agent set-default jfrog && kiro-cli chat   # or as the default
 ```
 
-The agent loads the `jfrog` skill as its system prompt (+ its `references/` as context) and runs JFrog
-work through the **`jf` CLI**. For safety, only `jf`/`jq` auto-run (`toolsSettings.shell.allowedCommands`);
-other shell commands prompt in interactive use. For headless/CI runs, trust the shell tool explicitly:
-`kiro-cli chat --agent jfrog --no-interactive --trust-tools=execute_bash "…"`.
-
 > **`shell` vs `execute_bash`:** they name the same tool. The agent config uses the friendly name
 > `shell` (as `kiro-cli agent validate` expects); the `--trust-tools` flag uses the runtime id
 > `execute_bash`. Different spellings, same capability.
 
-**Uninstall:** `rm ~/.kiro/agents/jfrog.json` (and optionally the copied `~/.kiro/skills/jfrog*`).
+**Uninstall:** `rm -f ~/.kiro/steering/jfrog*.md` and `rm -rf ~/.kiro/skills/jfrog*` (and, if you installed
+the optional agent, `rm ~/.kiro/agents/jfrog.json`).
 
 > Phase 1 = skills only (no MCP), matching the IDE power.
 
@@ -206,7 +229,8 @@ activation works reliably. See [Troubleshooting Installation](POWER.md#troublesh
   pinned tag (see [VENDOR.md](./VENDOR.md))
 - `npm run gen-steering` — (maintainers) regenerate `steering/` from the embedded `skills/`
 - `npm run install-skills` — (optional, user) install the real Agent Skills into `.kiro/skills`
-- `npm run install-cli-agent` — install the JFrog agent for `kiro-cli` (see [JFrog for the CLI](#jfrog-for-the-cli-kiro-cli))
+- `npm run install-cli` (alias `install-cli-agent`) — additive install of the JFrog skills + steering for
+  `kiro-cli` (`--with-agent` for the optional isolated agent; see [JFrog for the CLI](#jfrog-for-the-cli-kiro-cli))
 - `npm run verify-install` — check prerequisites (`jf` CLI ≥ 2.100.0 + a configured server); Windows:
   `pwsh scripts/verify-install.ps1`
 - `npm run validate` — lint skill frontmatter, POWER.md, and steering
