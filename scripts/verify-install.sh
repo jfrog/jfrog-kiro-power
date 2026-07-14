@@ -29,7 +29,10 @@ else
 fi
 
 # 2) at least one configured server
-if command -v jf >/dev/null 2>&1 && jf config show 2>/dev/null | grep -q "Server ID"; then
+# NB: capture first, then match. `jf config show | grep -q` would SIGPIPE `jf` when grep
+# closes the pipe on first match, and `pipefail` turns that 141 into a false "not configured".
+cfg="$(jf config show 2>/dev/null || true)"
+if command -v jf >/dev/null 2>&1 && printf '%s' "$cfg" | grep -q "Server ID"; then
   echo "✓ JFrog server configured"
 else
   echo "✗ no JFrog server configured."
