@@ -173,8 +173,8 @@ JFrog work runs through the **`jf` CLI** (never `curl`). For headless/CI runs, t
 > **`shell` vs `execute_bash`:** they name the same tool — the runtime id used by `--trust-tools` is
 > `execute_bash`; some configs use the friendly alias `shell`. Different spellings, same capability.
 
-**Uninstall:** `rm -f ~/.kiro/steering/jfrog*.md ~/.kiro/steering/jfrog-ai-catalog-skills*.md ~/.kiro/steering/jfrog-package-safety-and-download.md`
-and `rm -rf ~/.kiro/skills/jfrog*`.
+**Uninstall:** `rm -f ~/.kiro/steering/jfrog*.md` and `rm -rf ~/.kiro/skills/jfrog*` (every JFrog steering
+file and skill dir is `jfrog*`-prefixed, so this leaves any of your own files untouched).
 
 > Phase 1 = skills only (no MCP), matching the IDE power.
 
