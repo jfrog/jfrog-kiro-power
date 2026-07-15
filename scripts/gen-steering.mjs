@@ -80,6 +80,16 @@ export function rewriteRefPointers(text, name) {
     .replace(/`(?:<skill_path>\/)?references\/(?:\*(?:\.md)?)?`/gi, `the \`#${name}-references\` steering`);
 }
 
+// Redirect in-skill script pointers to where install-scripts.mjs puts them
+// (~/.kiro/jfrog-scripts/<name>/<script>), because the Power/steering ships no skills/ tree. The skill
+// body references scripts as `<skill_path>/scripts/<file>` or bare `scripts/<file>`; both are rewritten
+// to the concrete on-disk path so the always-loaded steering can run them without a registered skill.
+// Deterministic string transform — no LLM, and skills/ is never edited.
+export function rewriteScriptPointers(text, name) {
+  const base = `~/.kiro/jfrog-scripts/${name}`;
+  return text.replace(/(?:<skill_path>\/)?scripts\/([A-Za-z0-9._-]+)/g, `${base}/$1`);
+}
+
 // Build guard: after rewriting, no on-disk `references/<x>.md` pointer may survive in a generated file
 // (it would be a dead link in a Power-only install). Throws so a future skill introducing an unmatched
 // pointer shape fails the build loudly instead of shipping broken steering.
@@ -113,8 +123,9 @@ async function main() {
     const hasScripts = (await fs.readdir(scriptsDir).catch(() => [])).length > 0;
 
     // Transform, don't fork: render the SKILL.md body but redirect the in-skill file pointers to what
-    // the Power actually ships (bundled references steering), so a Power-only install has no dead links.
-    const renderedBody = rewriteRefPointers(body.trim(), name);
+    // is actually available — references become the bundled `#<name>-references` steering, and script
+    // pointers become the concrete ~/.kiro/jfrog-scripts/<name>/ path that install-scripts.mjs fills.
+    const renderedBody = rewriteScriptPointers(rewriteRefPointers(body.trim(), name), name);
 
     // Signpost the two things a Power cannot carry: per-file references (→ bundled steering) and helper
     // scripts (→ only present via the optional skills install). Data-driven, so future skills get them too.
@@ -127,9 +138,11 @@ async function main() {
     }
     if (hasScripts) {
       notes.push(
-        `> **Helper scripts** (\`scripts/*\`) are installed into \`~/.kiro/skills/\` during onboarding ` +
-          `(see POWER.md → Onboarding), or by the CLI install. If they are not present (install skipped ` +
-          `or offline), perform the equivalent steps manually.`
+        `> **Helper scripts** for this skill live at \`~/.kiro/jfrog-scripts/${name}/\` once installed. ` +
+          `They are not bundled with the Power — install them on demand with \`npm run install-scripts\` ` +
+          `(or the equivalent fetch in POWER.md → Onboarding). If a script is missing (install skipped or ` +
+          `offline), install it then retry, or perform the equivalent steps manually; the steering still ` +
+          `drives everything else.`
       );
     }
 

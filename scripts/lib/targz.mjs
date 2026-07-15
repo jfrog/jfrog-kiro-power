@@ -1,6 +1,6 @@
 // Dependency-free, cross-platform .tar.gz handling (no external `tar`/`gzip` binary, no npm deps).
-// Used by sync-skills.mjs (maintainer) and install-skills.mjs (optional user install) so both work
-// identically on Windows, macOS, and Linux.
+// Used by sync-skills.mjs (maintainer) and install-scripts.mjs (on-demand helper-script install) so
+// both work identically on Windows, macOS, and Linux.
 //
 // Scope: parses the standard ustar/GNU/pax tarballs that GitHub `codeload` produces. Handles regular
 // files, directories, GNU long names ('L'), and pax path records ('x'/'g'). Symlinks and other exotic

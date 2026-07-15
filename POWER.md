@@ -41,10 +41,11 @@ API paths, AQL, schemas), pull the matching `-references` file with `#jfrog-refe
 > **Scope of the Power.** A Kiro Power itself carries **knowledge only** — `POWER.md` + `mcp.json` +
 > `steering/*.md`, no executables — so the steering above (plus the `#jfrog-references` bundles) is
 > available immediately, and reference material is reachable in the Power (via `#jfrog-references`, not
-> on-disk `references/*.md` files). The skill's **helper scripts** (login/environment-check) and `/`-invoke
-> slash commands cannot ride inside a power; instead [Onboarding](#onboarding) step 2 installs the pinned
-> skills into `~/.kiro/skills/` on first use, so those become available too. If that install is declined
-> or offline, the Power still works on steering knowledge alone.
+> on-disk `references/*.md` files). The skill's **helper scripts** (login/environment-check) cannot ride
+> inside a power; instead [Onboarding](#onboarding) step 2 fetches **just those scripts** on demand into
+> `~/.kiro/jfrog-scripts/` (no skill is registered, so nothing duplicates the steering). If that fetch is
+> declined or offline, the Power still works on steering knowledge alone and retries when a script is next
+> needed.
 
 ## Onboarding
 
@@ -64,39 +65,44 @@ Kiro runs this section automatically the first time the power is used.
    `pwsh scripts/verify-install.ps1` (Windows). If the CLI is missing or too old, see
    [JFrog CLI Setup](#jfrog-cli-setup).
 
-2. **Install the JFrog skills into `~/.kiro/skills/`.** This makes the runnable helper scripts
-   (login/environment-check) and `/`-invoke available on top of the steering. Because a Kiro Power does
-   not package a `skills/` folder, there is no local copy — this step downloads the **same pinned
-   version** (`v0.16.0`, matching the shipped steering) from public GitHub, and is the **only** action
-   that touches the network. **Confirm once with the user, then install globally** (so it's done a single
-   time for all workspaces). If the user declines or is offline, skip it — the steering still provides the
-   full JFrog knowledge; only the helper scripts and `/`-invoke will be unavailable until installed later.
+2. **(On demand) Install the JFrog helper scripts.** The steering already provides the full JFrog
+   knowledge — the only thing not bundled is the skills' runnable helper **scripts**
+   (login/environment-check). When a request needs one and it is not yet on disk, install **just the
+   scripts** (no `SKILL.md`, so no skill is registered and nothing duplicates the steering). They come
+   from the **same pinned version** (`v0.16.0`) and land in `~/.kiro/jfrog-scripts/<skill>/`; this is the
+   **only** action that touches the network. **Confirm once with the user, then install globally.** Be
+   graceful: if the user declines or is offline, skip it — the steering still works — and simply retry the
+   next time a script is needed.
 
    **Preferred — from a checkout of this repo (cross-platform, no external tools):**
 
    ```bash
-   npm run install-skills -- --global   # into ~/.kiro/skills (all workspaces)
-   npm run install-skills               # or into ./.kiro/skills (this workspace only)
+   npm run install-scripts                # -> ~/.kiro/jfrog-scripts   (global)
+   npm run install-scripts -- --workspace # -> ./.kiro/jfrog-scripts   (this workspace only)
    ```
 
-   **Without the repo — self-contained, pick your OS:**
+   **Without the repo — self-contained, scripts only (pick your OS):**
 
    *macOS / Linux:*
 
    ```bash
    TMP="$(mktemp -d)"
    curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.16.0 | tar -xz -C "$TMP"
-   mkdir -p ~/.kiro/skills && cp -R "$TMP"/jfrog-skills-*/skills/* ~/.kiro/skills/ && rm -rf "$TMP"
+   for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
+     mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
+   rm -rf "$TMP"
    ```
 
-   *Windows (PowerShell — uses the `.zip` form + built-in `Expand-Archive`, no `tar` needed):*
+   *Windows (PowerShell — `.zip` + built-in `Expand-Archive`, no `tar` needed):*
 
    ```powershell
    $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
    Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.16.0 -OutFile "$tmp\s.zip"
    Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
-   New-Item -ItemType Directory -Force $HOME\.kiro\skills | Out-Null
-   Copy-Item "$tmp\jfrog-skills-*\skills\*" $HOME\.kiro\skills\ -Recurse -Force; Remove-Item $tmp -Recurse -Force
+   Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
+     $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null
+     Copy-Item "$($_.FullName)\*" "$HOME\.kiro\jfrog-scripts\$s\" -Recurse -Force }
+   Remove-Item $tmp -Recurse -Force
    ```
 
 > **Maintainers only:** `scripts/sync-skills.mjs` (re-vendor the embedded skills) and

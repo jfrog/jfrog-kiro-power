@@ -13,7 +13,8 @@ import {
   validateSteeringFile,
 } from './validate.mjs';
 import { installAdditive } from './install-cli.mjs';
-import { rewriteRefPointers, assertNoDeadRefPointers } from './gen-steering.mjs';
+import { installScripts } from './install-scripts.mjs';
+import { rewriteRefPointers, rewriteScriptPointers, assertNoDeadRefPointers } from './gen-steering.mjs';
 
 function writeSkill(root, dir, body) {
   mkdirSync(join(root, dir), { recursive: true });
@@ -161,4 +162,44 @@ test('assertNoDeadRefPointers throws on a residual references/<x>.md and passes 
   assert.doesNotThrow(() =>
     assertNoDeadRefPointers('jfrog.md', 'load the `#jfrog-references` steering — all clean here')
   );
+});
+
+// gen-steering redirects in-skill script pointers to the concrete on-disk path that install-scripts fills
+// (~/.kiro/jfrog-scripts/<name>/<script>), so the always-loaded steering can run them without a registered
+// skill. Both `<skill_path>/scripts/<file>` and bare `scripts/<file>` must be rewritten.
+test('rewriteScriptPointers redirects <skill_path>/scripts and bare scripts/ to ~/.kiro/jfrog-scripts', () => {
+  assert.equal(
+    rewriteScriptPointers('bash <skill_path>/scripts/check-environment.sh <model>', 'jfrog'),
+    'bash ~/.kiro/jfrog-scripts/jfrog/check-environment.sh <model>'
+  );
+  assert.equal(
+    rewriteScriptPointers('written by `scripts/check-environment.sh`', 'jfrog'),
+    'written by `~/.kiro/jfrog-scripts/jfrog/check-environment.sh`'
+  );
+  assert.match(
+    rewriteScriptPointers('run scripts/jfrog-login-save-credentials.sh', 'jfrog-ai-catalog-skills'),
+    /~\/\.kiro\/jfrog-scripts\/jfrog-ai-catalog-skills\/jfrog-login-save-credentials\.sh/
+  );
+});
+
+// install-scripts must land ONLY the scripts/ contents (no SKILL.md, no references) into <dest>/<skill>/.
+test('installScripts copies only scripts, never SKILL.md or references', async () => {
+  const src = mkdtempSync(join(tmpdir(), 'src-skills-'));
+  // fake extracted skills tree: one skill with scripts + references + SKILL.md, one with no scripts
+  mkdirSync(join(src, 'jfrog', 'scripts'), { recursive: true });
+  mkdirSync(join(src, 'jfrog', 'references'), { recursive: true });
+  writeFileSync(join(src, 'jfrog', 'SKILL.md'), '---\nname: jfrog\n---\nbody');
+  writeFileSync(join(src, 'jfrog', 'scripts', 'check-environment.sh'), '#!/bin/bash\necho ok');
+  writeFileSync(join(src, 'jfrog', 'references', 'x.md'), '# ref');
+  mkdirSync(join(src, 'jfrog-package-safety-and-download'), { recursive: true });
+  writeFileSync(join(src, 'jfrog-package-safety-and-download', 'SKILL.md'), '---\nname: p\n---\nb');
+
+  const dest = mkdtempSync(join(tmpdir(), 'jfrog-scripts-'));
+  const installed = await installScripts({ srcSkillsDir: src, dest });
+
+  assert.deepEqual(installed, ['jfrog'], 'only the skill that has scripts is installed');
+  assert.ok(existsSync(join(dest, 'jfrog', 'check-environment.sh')), 'script file lands');
+  assert.ok(!existsSync(join(dest, 'jfrog', 'SKILL.md')), 'no SKILL.md written');
+  assert.ok(!existsSync(join(dest, 'jfrog', 'references')), 'no references written');
+  assert.ok(!existsSync(join(dest, 'jfrog-package-safety-and-download')), 'skill with no scripts is skipped');
 });

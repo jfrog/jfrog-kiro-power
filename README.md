@@ -24,10 +24,11 @@ So the canonical JFrog skills are delivered two ways:
    knowledge works immediately, offline, with no download. Deep reference material is bundled as
    `#jfrog-references` / `#jfrog-ai-catalog-skills-references` (the render redirects there instead of the
    on-disk `references/*.md` files a power can't carry).
-2. **Real Agent Skills (optional).** The bundled steering carries knowledge only — a power can't bundle a
-   skill's **runnable helper scripts** or `/`-invoke. If you want those, an optional onboarding step
-   installs the real skills into `.kiro/skills/` from the same pinned version. This is the only step that
-   touches the network.
+2. **Helper scripts (on demand).** The bundled steering carries knowledge only — a power can't bundle a
+   skill's **runnable helper scripts** (login/environment-check). When one is needed, an on-demand step
+   fetches **just the scripts** (no `SKILL.md`) from the same pinned version into `~/.kiro/jfrog-scripts/`.
+   No skill is registered, so nothing duplicates the steering. This is the only step that touches the
+   network, and it is graceful — skipped/offline installs simply retry when a script is next needed.
 
 Everything ships pinned and reproducible for a given power version; see [VENDOR.md](./VENDOR.md).
 
@@ -86,25 +87,29 @@ npm run verify-install                 # macOS/Linux
 pwsh scripts/verify-install.ps1        # Windows
 ```
 
-### 3. (Optional) Install the real Agent Skills
+### 3. (On demand) Install the JFrog helper scripts
 
-Only if you want the skills in Kiro's skill UI / `/`-invoke.
+The steering is complete on its own; you only need this when a request uses a skill's runnable helper
+script (login/environment-check). It fetches **scripts only** (no `SKILL.md`, so no skill registers and
+nothing duplicates the steering) into `~/.kiro/jfrog-scripts/`.
 
 **Preferred — from a checkout of this repo (cross-platform, dependency-free, no external `tar`/`curl`):**
 
 ```bash
-npm run install-skills            # into ./.kiro/skills  (this workspace)
-npm run install-skills -- --global # into ~/.kiro/skills  (all workspaces)
+npm run install-scripts                # -> ~/.kiro/jfrog-scripts   (global)
+npm run install-scripts -- --workspace # -> ./.kiro/jfrog-scripts   (this workspace)
 ```
 
-**Without this repo — self-contained (also in POWER.md → Onboarding):**
+**Without this repo — self-contained, scripts only (also in POWER.md → Onboarding):**
 
 *macOS / Linux:*
 
 ```bash
 TMP="$(mktemp -d)"
 curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.16.0 | tar -xz -C "$TMP"
-mkdir -p .kiro/skills && cp -R "$TMP"/jfrog-skills-*/skills/* .kiro/skills/ && rm -rf "$TMP"
+for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
+  mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
+rm -rf "$TMP"
 ```
 
 *Windows (PowerShell — `.zip` + built-in `Expand-Archive`, no `tar` needed):*
@@ -113,8 +118,10 @@ mkdir -p .kiro/skills && cp -R "$TMP"/jfrog-skills-*/skills/* .kiro/skills/ && r
 $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
 Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.16.0 -OutFile "$tmp\s.zip"
 Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
-New-Item -ItemType Directory -Force .kiro\skills | Out-Null
-Copy-Item "$tmp\jfrog-skills-*\skills\*" .kiro\skills\ -Recurse -Force; Remove-Item $tmp -Recurse -Force
+Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
+  $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null
+  Copy-Item "$($_.FullName)\*" "$HOME\.kiro\jfrog-scripts\$s\" -Recurse -Force }
+Remove-Item $tmp -Recurse -Force
 ```
 
 ## Authentication
@@ -227,7 +234,7 @@ activation works reliably. See [Troubleshooting Installation](POWER.md#troublesh
 - `npm run sync-skills` — (maintainers) re-vendor the embedded skills from `jfrog/jfrog-skills` at the
   pinned tag (see [VENDOR.md](./VENDOR.md))
 - `npm run gen-steering` — (maintainers) regenerate `steering/` from the embedded `skills/`
-- `npm run install-skills` — install the JFrog Agent Skills into `.kiro/skills` (`--global` for `~/.kiro/skills`)
+- `npm run install-scripts` — (on demand) install the JFrog helper scripts into `~/.kiro/jfrog-scripts` (`--workspace` for `./.kiro/jfrog-scripts`)
 - `npm run install-cli` — additive install of the JFrog skills for `kiro-cli`
   (see [JFrog for the CLI](#jfrog-for-the-cli-kiro-cli))
 - `npm run verify-install` — check prerequisites (`jf` CLI ≥ 2.100.0 + a configured server); Windows:

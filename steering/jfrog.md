@@ -72,7 +72,7 @@ environment check and **remember its stdout** as `<UA>` for the rest of the
 session:
 
 ```bash
-bash <skill_path>/scripts/check-environment.sh <model-slug>
+bash ~/.kiro/jfrog-scripts/jfrog/check-environment.sh <model-slug>
 # stdout (one line): jfrog-skills/<version> [(tool=<harness>; model=<model-slug>)] jfrog-cli-go/<cli-version>
 # stderr: JSON state (cached 24h at ${JFROG_CLI_HOME_DIR:-$HOME/.jfrog}/skills-cache/jfrog-skill-state.json)
 ```
@@ -122,7 +122,7 @@ Use **`jq`** for all JSON parsing of CLI and API output (pipes, `-r`, filters).
 `${JFROG_CLI_HOME_DIR:-$HOME/.jfrog}/skills-cache/` is **not** a general scratch
 or temp directory. Use it **only** for these two artifacts:
 
-1. **`jfrog-skill-state.json`** — written by `scripts/check-environment.sh`
+1. **`jfrog-skill-state.json`** — written by `~/.kiro/jfrog-scripts/jfrog/check-environment.sh`
    (24-hour CLI check cache).
 2. **`onemodel-schema-${JFROG_SERVER_ID}.graphql`** — cached OneModel supergraph
    schema (see the `onemodel-graphql` section of the `#jfrog-references` steering).
@@ -520,4 +520,4 @@ server, user, or intent). The file is only valid for the immediate sequence of
 operations that motivated the original call.
 
 > **References:** deep material for this skill ships as the `#jfrog-references` steering (each former reference file is a `## <file>` section there). Load it on demand.
-> **Helper scripts** (`scripts/*`) are installed into `~/.kiro/skills/` during onboarding (see POWER.md → Onboarding), or by the CLI install. If they are not present (install skipped or offline), perform the equivalent steps manually.
+> **Helper scripts** for this skill live at `~/.kiro/jfrog-scripts/jfrog/` once installed. They are not bundled with the Power — install them on demand with `npm run install-scripts` (or the equivalent fetch in POWER.md → Onboarding). If a script is missing (install skipped or offline), install it then retry, or perform the equivalent steps manually; the steering still drives everything else.
