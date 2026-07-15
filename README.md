@@ -4,7 +4,7 @@ This repository holds the JFrog integration for Kiro's **two** surfaces, both dr
 vendored JFrog [Agent Skills](https://kiro.dev/docs/skills/):
 
 - **IDE Power** — for the Kiro **IDE** (Powers panel). Ships `POWER.md` + `steering/`.
-- **CLI** — for **`kiro-cli`** (the terminal agent). Installs the JFrog skills + steering into `~/.kiro/`
+- **CLI** — for **`kiro-cli`** (the terminal agent). Installs the JFrog **skills** into `~/.kiro/`
   so JFrog composes into any session (additive, like the IDE).
 
 Both enable AI-assisted JFrog Platform workflows — searching artifacts, managing repositories, handling
@@ -134,14 +134,19 @@ Once installed, open a new agent chat in Kiro and try:
 ## JFrog for the CLI (`kiro-cli`)
 
 `kiro-cli` (the terminal agent) is a **separate runtime** from the IDE — it does not read
-`~/.kiro/powers/`, so it can't consume the IDE power. Its **additive** mechanism is skills
-(`~/.kiro/skills/`) + global steering (`~/.kiro/steering/`): the default agent auto-loads both, so JFrog
-**composes into any session** — the default agent, or your own custom agent (which inherits default
-skills/steering). This mirrors the IDE, where many powers compose in one session.
+`~/.kiro/powers/`, so it can't consume the IDE power. Its **additive** mechanism is **skills**
+(`~/.kiro/skills/`): the default agent auto-loads them, so JFrog **composes into any session** — the
+default agent, or your own custom agent (which inherits default skills). This mirrors the IDE, where
+many powers compose in one session.
+
+The skills are the CLI's complete capability: they carry the JFrog knowledge, the deep `references/`,
+the runnable helper scripts, and `/`-invoke. Steering is the IDE power's channel and is **not** installed
+for the CLI — the steering is generated from these same skills, so shipping it too would advertise JFrog
+twice within one CLI session.
 
 > **Additive, not a replacement.** A `kiro-cli --agent` is *singular per session*, so the install never
-> registers JFrog as "the agent" (that would replace your own). It only adds the JFrog skills + steering,
-> so `kiro-cli chat` composes JFrog alongside whatever else you use.
+> registers JFrog as "the agent" (that would replace your own). It only adds the JFrog skills, so
+> `kiro-cli chat` composes JFrog alongside whatever else you use.
 
 **Easiest — one command, no checkout:**
 
@@ -152,13 +157,12 @@ curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/align-with-f
 **From a checkout of this repo (equivalent):**
 
 ```bash
-npm run install-cli                  # additive: skills + steering -> ~/.kiro (global)
-npm run install-cli -- --workspace   # scope into ./.kiro instead
+npm run install-cli                  # additive: skills -> ~/.kiro/skills (global)
+npm run install-cli -- --workspace   # scope into ./.kiro/skills instead
 ```
 
-Both copy the embedded JFrog skills into `~/.kiro/skills/` (knowledge + helper scripts) **and** the JFrog
-steering into `~/.kiro/steering/`. Installs are **idempotent** — re-running produces identical files and
-never touches steering files this repo doesn't own. Offline/local bootstrap:
+Both copy the embedded JFrog skills into `~/.kiro/skills/` (knowledge + `references/` + helper scripts).
+Installs are **idempotent** — re-running produces identical files. Offline/local bootstrap:
 `KIRO_POWER_SRC=<checkout> bash scripts/bootstrap-cli.sh`.
 
 Use it — no `--agent` needed:
@@ -173,8 +177,21 @@ JFrog work runs through the **`jf` CLI** (never `curl`). For headless/CI runs, t
 > **`shell` vs `execute_bash`:** they name the same tool — the runtime id used by `--trust-tools` is
 > `execute_bash`; some configs use the friendly alias `shell`. Different spellings, same capability.
 
-**Uninstall:** `rm -f ~/.kiro/steering/jfrog*.md` and `rm -rf ~/.kiro/skills/jfrog*` (every JFrog steering
-file and skill dir is `jfrog*`-prefixed, so this leaves any of your own files untouched).
+### Running both surfaces on one machine
+
+The IDE power (steering) and the CLI (skills) read **different** places, but **global `~/.kiro/skills/` is
+read by the IDE too**. So a **global** CLI install alongside the IDE power makes the IDE load JFrog twice
+(power steering + the global skill). To avoid that, pick one:
+
+- Install the CLI at **workspace scope** (`npm run install-cli -- --workspace`) in projects you don't open
+  in the IDE, or
+- Give the CLI its own profile via **`KIRO_HOME`** (e.g. `KIRO_HOME=~/.kiro-cli`), so its skills never
+  land in the `~/.kiro/` the IDE reads.
+
+A single-surface setup (only the IDE power, or only the CLI) has no duplication.
+
+**Uninstall:** `rm -rf ~/.kiro/skills/jfrog*` (every JFrog skill dir is `jfrog*`-prefixed, so this leaves
+any of your own files untouched).
 
 > Phase 1 = skills only (no MCP), matching the IDE power.
 
@@ -211,7 +228,7 @@ activation works reliably. See [Troubleshooting Installation](POWER.md#troublesh
   pinned tag (see [VENDOR.md](./VENDOR.md))
 - `npm run gen-steering` — (maintainers) regenerate `steering/` from the embedded `skills/`
 - `npm run install-skills` — install the JFrog Agent Skills into `.kiro/skills` (`--global` for `~/.kiro/skills`)
-- `npm run install-cli` — additive install of the JFrog skills + steering for `kiro-cli`
+- `npm run install-cli` — additive install of the JFrog skills for `kiro-cli`
   (see [JFrog for the CLI](#jfrog-for-the-cli-kiro-cli))
 - `npm run verify-install` — check prerequisites (`jf` CLI ≥ 2.100.0 + a configured server); Windows:
   `pwsh scripts/verify-install.ps1`

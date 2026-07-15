@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,41 +89,33 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: auto\n---').some((e) => e.includes('description')));
 });
 
-// The CLI installer's additive copy is the primary path: it must land the vendored skills/ AND the
-// generated steering/ into <dest>, and be idempotent (a re-run yields byte-identical files).
+// The CLI installer's additive copy is the primary path: it must land the vendored skills/ into
+// <dest> (skills only — steering is the IDE power's channel, not the CLI's) and be idempotent
+// (a re-run yields byte-identical files).
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const skillsSrc = join(repoRoot, 'skills');
-const steeringSrc = join(repoRoot, 'steering');
 
-test('installAdditive copies all skills and steering into <dest>', async () => {
+test('installAdditive copies all skills into <dest> and does not write steering', async () => {
   const dest = mkdtempSync(join(tmpdir(), 'kiro-additive-'));
-  const { skills, steering } = await installAdditive({ skillsSrc, steeringSrc, dest });
+  const { skills } = await installAdditive({ skillsSrc, dest });
 
   assert.ok(skills.includes('jfrog'), 'jfrog skill should be among the copied skills');
   assert.ok(existsSync(join(dest, 'skills', 'jfrog', 'SKILL.md')), 'jfrog/SKILL.md must land');
   for (const name of skills) {
     assert.ok(existsSync(join(dest, 'skills', name)), `skill dir ${name} must land`);
   }
-
-  const srcSteering = readdirSync(steeringSrc).filter((f) => f.endsWith('.md'));
-  assert.deepEqual(steering.slice().sort(), srcSteering.slice().sort(), 'all steering files reported');
-  for (const f of srcSteering) {
-    assert.ok(existsSync(join(dest, 'steering', f)), `steering/${f} must land`);
-  }
+  assert.ok(!existsSync(join(dest, 'steering')), 'CLI install must NOT create a steering/ dir');
 });
 
 test('installAdditive is idempotent (re-run -> byte-identical files)', async () => {
   const dest = mkdtempSync(join(tmpdir(), 'kiro-additive-idem-'));
-  await installAdditive({ skillsSrc, steeringSrc, dest });
+  await installAdditive({ skillsSrc, dest });
   const snap = (p) => readFileSync(p, 'utf8');
   const skillBefore = snap(join(dest, 'skills', 'jfrog', 'SKILL.md'));
-  const steerFile = readdirSync(join(dest, 'steering')).find((f) => f.endsWith('.md'));
-  const steerBefore = snap(join(dest, 'steering', steerFile));
 
-  await installAdditive({ skillsSrc, steeringSrc, dest }); // second run
+  await installAdditive({ skillsSrc, dest }); // second run
 
   assert.equal(snap(join(dest, 'skills', 'jfrog', 'SKILL.md')), skillBefore, 'skill file unchanged on re-run');
-  assert.equal(snap(join(dest, 'steering', steerFile)), steerBefore, 'steering file unchanged on re-run');
 });
 
 // gen-steering must render Power-safe steering: on-disk `references/<x>.md` and `scripts/*` pointers

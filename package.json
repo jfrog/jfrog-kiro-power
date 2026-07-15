@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "JFrog Power for Kiro — bundles and installs the official JFrog Agent Skills (Phase 1: skills only).",
+  "description": "JFrog for Kiro — IDE Power (POWER.md + steering) and kiro-cli (skills) built from the vendored JFrog Agent Skills (Phase 1: knowledge only, no MCP).",
   "license": "Apache-2.0",
   "scripts": {
     "sync-skills": "node scripts/sync-skills.mjs",
