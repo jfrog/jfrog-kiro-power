@@ -54,30 +54,32 @@ The script is dependency-free Node ESM and makes no changes outside the vendored
 
 ## Bumping the pin
 
-1. Edit `scripts/sync-skills-vendor.json` and set `pin` to the new upstream tag. **Also update the pinned
-   tag referenced in POWER.md and README.md** (the optional real-skills download URL).
-2. Re-vendor the embedded skills, then regenerate the shipped steering:
+1. Edit `scripts/sync-skills-vendor.json` and set `pin` to the new upstream tag. This is the **single
+   source of truth** — the hardcoded tags in POWER.md/README are synced from it in the next step (no
+   longer edited by hand).
+2. Re-sync everything from the pin with one command:
 
    ```bash
-   npm run sync-skills
-   npm run gen-steering
+   npm run revendor   # = sync-skills + gen-steering + sync-pin
    ```
 
-3. Review the diffs under `skills/` and `steering/` and commit them **together with** the updated
-   `sync-skills-vendor.json`:
+   Individually: `npm run sync-skills` (re-vendor `skills/`), `npm run gen-steering` (regenerate
+   `steering/`), `npm run sync-pin` (rewrite the jfrog-skills tag in POWER.md/README to the new pin).
+
+3. Review the diffs and commit them **together with** the updated `sync-skills-vendor.json`:
 
    ```bash
-   git add scripts/sync-skills-vendor.json skills steering
+   git add scripts/sync-skills-vendor.json skills steering POWER.md README.md
    git commit -m "feat(skills): vendor jfrog-skills@<tag>"
    ```
 
 4. Cut a power release so the new steering (and skills) ship to users. Until a release is published,
    installed powers keep using the previously vendored version.
 
-> **Planned CI:** a check job (re-vendor + re-gen and fail on drift) is planned but not yet wired up —
-> `.github/workflows/` currently only contains `cla.yml`. Until then, run `npm run sync-skills` and
-> `npm run gen-steering` locally after bumping the pin and confirm `git diff skills/ steering/` is empty
-> before committing.
+> **CI enforces this.** `.github/workflows/ci.yml` re-runs `gen-steering`, `sync-pin`, and `sync-skills`
+> and fails on any diff — so a bump that forgets a step (stale steering, or a POWER.md/README pin that
+> doesn't match `sync-skills-vendor.json`) is caught before merge. Run `npm run revendor` locally and
+> commit a clean tree.
 
 ## Notes
 

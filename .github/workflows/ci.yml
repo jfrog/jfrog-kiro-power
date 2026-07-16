@@ -36,8 +36,17 @@ jobs:
       # skills/ is vendored from jfrog/jfrog-skills at the pin in sync-skills-vendor.json. Re-vendoring
       # must produce no diff (the committed tree is byte-identical to the pinned upstream). Runs last
       # because sync-skills rewrites skills/.
+      # The IDE fetches helper scripts using the tag hardcoded in POWER.md/README. It must equal the
+      # pin the steering was generated at, or on-demand scripts could mismatch the shipped steering.
+      - name: Pin-sync drift check
+        run: |
+          npm run sync-pin
+          git diff --exit-code -- POWER.md README.md \
+            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json — run 'npm run sync-pin' and commit"; exit 1; }
+
+      # Runs last: sync-skills rewrites skills/ from the pinned upstream; it must produce no diff.
       - name: Vendoring drift check
         run: |
           npm run sync-skills
           git diff --exit-code -- skills/ \
-            || { echo "::error::skills/ drifted from the pinned upstream — run 'npm run sync-skills' (and 'npm run gen-steering') and commit"; exit 1; }
+            || { echo "::error::skills/ drifted from the pinned upstream — run 'npm run revendor' and commit"; exit 1; }
