@@ -158,7 +158,7 @@ twice within one CLI session.
 **Easiest — one command, no checkout:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/add-cli-and-ide-compability/scripts/bootstrap-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/main/scripts/bootstrap-cli.sh | bash
 ```
 
 **From a checkout of this repo (equivalent):**
@@ -169,7 +169,9 @@ npm run install-cli -- --workspace   # scope into ./.kiro/skills instead
 ```
 
 Both copy the embedded JFrog skills into `~/.kiro/skills/` (knowledge + `references/` + helper scripts).
-Installs are **idempotent** — re-running produces identical files. Offline/local bootstrap:
+Installs are **idempotent** — re-running produces identical files. The one-liner installs the **latest
+published release** by default (falling back to `main` if there are no releases yet); pin a specific
+version with `JFROG_KIRO_REF=<tag|branch>`. Offline/local bootstrap:
 `KIRO_POWER_SRC=<checkout> bash scripts/bootstrap-cli.sh`.
 
 Use it — no `--agent` needed:
