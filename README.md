@@ -192,8 +192,8 @@ The IDE power (steering) and the CLI (skills) read **different** places, but **g
 read by the IDE too**. So a **global** CLI install alongside the IDE power makes the IDE load JFrog twice
 (power steering + the global skill). To avoid that, pick one:
 
-- Install the CLI at **workspace scope** (`npm run install-cli -- --workspace`) in projects you don't open
-  in the IDE, or
+- Install the CLI at **workspace scope** (`npm run install-cli -- --workspace`, or the one-liner with
+  `| bash -s -- --workspace`) in projects you don't open in the IDE, or
 - Give the CLI its own profile via **`KIRO_HOME`** (e.g. `KIRO_HOME=~/.kiro-cli`), so its skills never
   land in the `~/.kiro/` the IDE reads.
 
