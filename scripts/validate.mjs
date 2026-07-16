@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // Validates the Kiro power's skills and POWER.md frontmatter. Zero dependencies.
 // CLI: `node scripts/validate.mjs` -> exit 1 on any error, else prints "validation passed".
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';

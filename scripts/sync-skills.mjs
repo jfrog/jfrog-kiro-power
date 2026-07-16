@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // Vendors skill content from jfrog/jfrog-skills into this plugin.
 // Run when bumping the pin in scripts/sync-skills-vendor.json:  node scripts/sync-skills.mjs
 //

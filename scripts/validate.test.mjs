@@ -1,3 +1,4 @@
+// (c) JFrog Ltd. (2026)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';

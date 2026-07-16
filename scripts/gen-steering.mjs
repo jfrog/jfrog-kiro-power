@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // Generates the power's steering/ files from the embedded skills/ tree.
 //
 // WHY: a Kiro Power only packages POWER.md + mcp.json + steering/ — it does NOT ship skills/.

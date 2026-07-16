@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // Installs the JFrog integration for the Kiro CLI (`kiro-cli`) — ADDITIVE, skills only.
 //
 // kiro-cli is a SEPARATE runtime from the Kiro IDE — it does not read ~/.kiro/powers/, so it cannot

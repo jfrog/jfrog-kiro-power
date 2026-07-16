@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // ON-DEMAND, scripts-only — install ONLY the JFrog skills' runnable helper scripts (login /
 // environment-check) into ~/.kiro/jfrog-scripts/ (or ./.kiro/jfrog-scripts with --workspace).
 //

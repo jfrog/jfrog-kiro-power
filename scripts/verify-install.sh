@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (c) JFrog Ltd. (2026)
 # Verifies the prerequisites for the JFrog Kiro Power on macOS/Linux.
 # Checks: (1) jf CLI present and >= 2.100.0, (2) at least one JFrog server configured.
 # Exit 0 = all good; exit 1 = something needs attention.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (c) JFrog Ltd. (2026)
 # One-command, additive install of the JFrog integration for the Kiro CLI (`kiro-cli`) — no checkout needed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/main/scripts/bootstrap-cli.sh | bash

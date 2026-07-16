@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// (c) JFrog Ltd. (2026)
 // Keep the hardcoded jfrog-skills pin in POWER.md and README.md in lockstep with the single source of
 // truth, scripts/sync-skills-vendor.json.
 //

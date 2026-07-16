@@ -1,3 +1,4 @@
+// (c) JFrog Ltd. (2026)
 // Dependency-free, cross-platform .tar.gz handling (no external `tar`/`gzip` binary, no npm deps).
 // Used by sync-skills.mjs (maintainer) and install-scripts.mjs (on-demand helper-script install) so
 // both work identically on Windows, macOS, and Linux.
