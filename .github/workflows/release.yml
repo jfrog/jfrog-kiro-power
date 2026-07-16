@@ -1,0 +1,38 @@
+name: Release
+
+# Cut a release by pushing a tag:  git tag vX.Y.Z && git push origin vX.Y.Z
+# (bump package.json "version" to match first). The tag is the release users pin via
+# "Import from GitHub" in Kiro; no build artifact is required for a Kiro power.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Gate the release on the same checks as CI so a tag can never ship broken steering/skills.
+      - name: Validate before releasing
+        run: |
+          npm test
+          npm run validate
+
+      - name: Steering drift check
+        run: |
+          npm run gen-steering
+          git diff --exit-code -- steering/ \
+            || { echo "::error::steering/ is stale at this tag — regenerate and re-tag"; exit 1; }
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes

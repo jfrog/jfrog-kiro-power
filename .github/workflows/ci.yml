@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, align-with-fleet]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No dependencies to install: the tooling is dependency-free Node ESM.
+      - name: Unit tests
+        run: npm test
+
+      - name: Validate skills, POWER.md, and steering
+        run: npm run validate
+
+      # steering/ is generated from skills/ by gen-steering.mjs. It must equal a fresh render,
+      # i.e. it was regenerated (not hand-edited) after the last skills change.
+      - name: Steering drift check
+        run: |
+          npm run gen-steering
+          git diff --exit-code -- steering/ \
+            || { echo "::error::steering/ is stale — run 'npm run gen-steering' and commit the result"; exit 1; }
+
+      # skills/ is vendored from jfrog/jfrog-skills at the pin in sync-skills-vendor.json. Re-vendoring
+      # must produce no diff (the committed tree is byte-identical to the pinned upstream). Runs last
+      # because sync-skills rewrites skills/.
+      - name: Vendoring drift check
+        run: |
+          npm run sync-skills
+          git diff --exit-code -- skills/ \
+            || { echo "::error::skills/ drifted from the pinned upstream — run 'npm run sync-skills' (and 'npm run gen-steering') and commit"; exit 1; }
