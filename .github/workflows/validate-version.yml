@@ -1,0 +1,23 @@
+# Copyright (c) JFrog Ltd. 2026
+name: Validate version
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the repository to access the VERSION file
+      - uses: actions/checkout@v5
+
+      # Verify the VERSION file contains a valid semver string
+      - name: Check version format
+        run: |
+          VERSION=$(cat VERSION)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format in VERSION file: '$VERSION'. Expected semver (e.g. 1.2.3)"
+            exit 1
+          fi
+          echo "Version is valid: $VERSION"
