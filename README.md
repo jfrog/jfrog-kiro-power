@@ -158,7 +158,7 @@ twice within one CLI session.
 **Easiest — one command, no checkout:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/align-with-fleet/scripts/bootstrap-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/add-cli-and-ide-compability/scripts/bootstrap-cli.sh | bash
 ```
 
 **From a checkout of this repo (equivalent):**

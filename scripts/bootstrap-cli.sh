@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command, additive install of the JFrog integration for the Kiro CLI (`kiro-cli`) — no checkout needed.
 #
-#   curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/align-with-fleet/scripts/bootstrap-cli.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/add-cli-and-ide-compability/scripts/bootstrap-cli.sh | bash
 #
 # It copies the JFrog skills into ~/.kiro/skills, so JFrog composes into ANY kiro-cli session (the
 # default agent, or your own custom agent) — just run `kiro-cli chat` and ask a JFrog question. The
@@ -12,14 +12,14 @@
 #
 # Options / env:
 #   JFROG_KIRO_REPO=owner/repo   override source repo   (default: jfrog/jfrog-kiro-power)
-#   JFROG_KIRO_REF=<branch/tag>  override source ref    (default: align-with-fleet)
+#   JFROG_KIRO_REF=<branch/tag>  override source ref    (default: add-cli-and-ide-compability)
 #   KIRO_POWER_SRC=<dir>         install from a local checkout instead of fetching (offline/testing)
 #
 # Always installs globally into ~/.kiro. Phase 1 = skills only (no MCP).
 set -euo pipefail
 
 REPO="${JFROG_KIRO_REPO:-jfrog/jfrog-kiro-power}"
-REF="${JFROG_KIRO_REF:-align-with-fleet}"
+REF="${JFROG_KIRO_REF:-add-cli-and-ide-compability}"
 
 SKILLS_DEST="$HOME/.kiro/skills"
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, align-with-fleet]
+    branches: [main, add-cli-and-ide-compability]
   pull_request:
 
 permissions:
