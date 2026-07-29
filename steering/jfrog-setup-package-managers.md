@@ -34,7 +34,7 @@ unlisted PM apply as usual).
 - `jf setup` **mutates user state** (`~/.npmrc`, `~/.docker/config.json`, …).
   Confirm before the first `jf setup` in a session unless the user explicitly
   requests silent/non-interactive setup.
-- Reading [the `#jfrog` steering](the `#jfrog` steering) is required — done as Step 0.1 below.
+- Reading the `#jfrog` steering is required — done as Step 0.1 below.
 
 **Out of scope:** CLI install/login (the `#jfrog-references` steering).
 
@@ -54,13 +54,13 @@ unlisted PM apply as usual).
 
 | File | When to read |
 |------|--------------|
-| [the `jf-setup-command` section of the `#jfrog-setup-package-managers-references` steering](the `jf-setup-command` section of the `#jfrog-setup-package-managers-references` steering) | CLI flags, supported PMs, exit-code contract, `jf setup --help` |
-| [the `global-cache-file` section of the `#jfrog-setup-package-managers-references` steering](the `global-cache-file` section of the `#jfrog-setup-package-managers-references` steering) | Global cache shape, resolution classes, jq one-liners |
-| [the `workspace-binding` section of the `#jfrog-setup-package-managers-references` steering](the `workspace-binding` section of the `#jfrog-setup-package-managers-references` steering) | Workspace binding schema, PM → type map, merge semantics |
+| the `jf-setup-command` section of the `#jfrog-setup-package-managers-references` steering | CLI flags, supported PMs, exit-code contract, `jf setup --help` |
+| the `global-cache-file` section of the `#jfrog-setup-package-managers-references` steering | Global cache shape, resolution classes, jq one-liners |
+| the `workspace-binding` section of the `#jfrog-setup-package-managers-references` steering | Workspace binding schema, PM → type map, merge semantics |
 
 ## Step 0 — Read the base skill, then ensure `jf` is ready
 
-1. **Read [the `#jfrog` steering](the `#jfrog` steering) fully first — always, before any
+1. **Read the `#jfrog` steering fully first — always, before any
    `jf` command, even when `jf` is already configured.** It carries the `jf`
    invariants this skill relies on. After reading, run that skill's
    *Environment check* (and export `JFROG_CLI_USER_AGENT`) before the first
@@ -68,9 +68,9 @@ unlisted PM apply as usual).
 2. Ensure `jf` + a configured server (`<SID>`). If `jf config show` already
    succeeds, skip to Step 1; otherwise:
    - **`jf --version`** missing → install per
-     [the `jfrog-cli-install-upgrade` section of the `#jfrog-references` steering](the `jfrog-cli-install-upgrade` section of the `#jfrog-references` steering).
+     the `jfrog-cli-install-upgrade` section of the `#jfrog-references` steering.
    - **`jf config show`** empty → login per
-     [the `jfrog-login-flow` section of the `#jfrog-references` steering](the `jfrog-login-flow` section of the `#jfrog-references` steering)
+     the `jfrog-login-flow` section of the `#jfrog-references` steering
      or `jf config add` with access-token (Bearer-only).
 3. Do not run `jf setup` until both succeed. Confirm before install/login.
 

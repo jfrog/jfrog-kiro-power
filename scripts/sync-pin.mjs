@@ -19,13 +19,16 @@ const FILES = ['POWER.md', 'README.md'];
 // Rewrite the pin in-place. Two rules:
 //   1. Functional (authoritative): codeload .../<repo>/{tar.gz|zip}/<ref>  ->  <ref> = pin. Scoped to
 //      the vendored repo so unrelated URLs (e.g. the jfrog-kiro-power bootstrap ref) are never touched.
-//   2. Prose (best-effort): a backticked v-semver — the skills pin's shape, currently its only use in
-//      these docs — is set to `<pin>`. (A SHA pin skips rule 2; rule 1 still applies.)
+//   2. Prose (best-effort): a backticked v-semver is set to `<pin>`, but ONLY when it's explicitly
+//      called out as "the pinned version" nearby — not any backticked vX.Y.Z-shaped string anywhere
+//      in the file. Without that anchor, an unrelated version mention added later (a kiro-cli tag, a
+//      jf CLI minimum version) would get silently overwritten on the next pin bump. (A SHA pin skips
+//      rule 2; rule 1 still applies.)
 export function syncPin(text, repo, pin) {
   const repoRe = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return text
     .replace(new RegExp(`(${repoRe}\\/(?:tar\\.gz|zip)\\/)[^\\s"'|)\\\\]+`, 'g'), `$1${pin}`)
-    .replace(/`v\d+\.\d+\.\d+[A-Za-z0-9.-]*`/g, `\`${pin}\``);
+    .replace(/(pinned version[^`\n]{0,20})`v\d+\.\d+\.\d+[A-Za-z0-9.-]*`/gi, `$1\`${pin}\``);
 }
 
 async function main() {

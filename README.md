@@ -35,7 +35,7 @@ So the canonical JFrog skills are delivered two ways:
 
 Everything ships pinned and reproducible for a given power version; see [VENDOR.md](./VENDOR.md).
 
-### The three skills
+### The six skills
 
 - **`jfrog`** — interact with the JFrog Platform via the JFrog CLI and REST/GraphQL APIs (Artifactory,
   Xray, builds, permissions, projects, release lifecycle, advanced security, and more).
@@ -43,6 +43,12 @@ Everything ships pinned and reproducible for a given power version; see [VENDOR.
   through JFrog.
 - **`jfrog-ai-catalog-skills`** — discover, install, manage, and publish agent skills hosted in the JFrog
   AI Catalog via `jf skills`.
+- **`jfrog-mcp-management`** — install, list, and remove MCP servers/tools via the JFrog Agent Guard, and
+  browse the JFrog MCP catalog.
+- **`jfrog-reference-architecture`** — JFrog Platform topology, sizing, deployment patterns, HA, and
+  disaster-recovery guidance.
+- **`jfrog-setup-package-managers`** — set up, configure, or bind a package manager (npm, pip, maven,
+  gradle, go, docker, helm, …) to Artifactory via `jf setup`.
 
 ## Installing
 

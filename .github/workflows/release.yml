@@ -1,3 +1,4 @@
+# (c) JFrog Ltd. (2026)
 name: Release
 
 # Releases come from main only. Merge the PR to main, then tag that main commit:
@@ -43,6 +44,18 @@ jobs:
           npm run gen-steering
           git diff --exit-code -- steering/ \
             || { echo "::error::steering/ is stale at this tag — regenerate and re-tag"; exit 1; }
+
+      - name: Pin-sync drift check
+        run: |
+          npm run sync-pin
+          git diff --exit-code -- POWER.md README.md \
+            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this tag — regenerate and re-tag"; exit 1; }
+
+      - name: Vendoring drift check
+        run: |
+          npm run sync-skills
+          git diff --exit-code -- skills/ \
+            || { echo "::error::skills/ drifted from the pinned upstream at this tag — regenerate and re-tag"; exit 1; }
 
       - name: Create GitHub release
         env:

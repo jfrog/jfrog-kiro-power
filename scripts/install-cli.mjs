@@ -14,6 +14,10 @@
 //   node scripts/install-cli.mjs               # additive: skills -> ~/.kiro (global)
 //   node scripts/install-cli.mjs --workspace   # additive: skills -> ./.kiro
 //
+// KIRO_HOME=<dir>  give the CLI its own profile (e.g. ~/.kiro-cli) instead of the default ~/.kiro, so
+// its skills never land where the IDE reads (see README "Running both surfaces on one machine").
+// Ignored with --workspace, which always scopes to ./.kiro regardless of KIRO_HOME.
+//
 // Phase 1 = skills only (no MCP). Dependency-free Node ESM; no network (copies the local embedded files).
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -22,6 +26,21 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
+
+// Expand a leading `~` (env vars are not shell-expanded) and resolve to an absolute path.
+export function expandHome(p) {
+  if (p === '~') return os.homedir();
+  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  return path.resolve(p);
+}
+
+// Workspace scope always wins (explicit --workspace on the command line). Otherwise KIRO_HOME
+// wins over the default ~/.kiro, so a KIRO_HOME profile never gets skills written to ~/.kiro too.
+export function resolveKiroDest({ workspace, cwd = process.cwd(), env = process.env, home = os.homedir() }) {
+  if (workspace) return path.join(cwd, '.kiro');
+  if (env.KIRO_HOME) return expandHome(env.KIRO_HOME);
+  return path.join(home, '.kiro');
+}
 
 // Copy every skill dir under skillsSrc into <dest>/skills (replacing each dir). Idempotent: a re-run
 // yields identical files. Returns the skill names it wrote.
@@ -44,7 +63,7 @@ export async function installAdditive({ skillsSrc, dest }) {
 
 async function main() {
   const workspace = process.argv.slice(2).includes('--workspace');
-  const dest = workspace ? path.join(process.cwd(), '.kiro') : path.join(os.homedir(), '.kiro');
+  const dest = resolveKiroDest({ workspace });
 
   const { skills } = await installAdditive({
     skillsSrc: path.join(repoRoot, 'skills'),

@@ -17,14 +17,14 @@ Pick the row matching the user's intent and read that reference file.
 
 | Intent | Read |
 |--------|------|
-| "What skills are available?" / browse the catalog / list versions / search by name | [the `discovering-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `discovering-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
-| Install or update a skill (latest or a pinned version), or a download is blocked | [the `installing-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `installing-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
-| "What's installed?" / remove an installed skill | [the `managing-installed-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `managing-installed-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
-| Publish / upload / release a skill to the catalog | [the `publishing-skills` section of the `#jfrog-ai-catalog-skills-references` steering](the `publishing-skills` section of the `#jfrog-ai-catalog-skills-references` steering) |
+| "What skills are available?" / browse the catalog / list versions / search by name | the `discovering-skills` section of the `#jfrog-ai-catalog-skills-references` steering |
+| Install or update a skill (latest or a pinned version), or a download is blocked | the `installing-skills` section of the `#jfrog-ai-catalog-skills-references` steering |
+| "What's installed?" / remove an installed skill | the `managing-installed-skills` section of the `#jfrog-ai-catalog-skills-references` steering |
+| Publish / upload / release a skill to the catalog | the `publishing-skills` section of the `#jfrog-ai-catalog-skills-references` steering |
 
 ## Prerequisites
 
-- **Read the base `jfrog` skill first.** [the `#jfrog` steering](the `#jfrog` steering)
+- **Read the base `jfrog` skill first.** the `#jfrog` steering
   owns the shared guards this skill depends on, so this skill does **not** repeat
   them — follow them there:
   - The [environment check](the `#jfrog` steering) — confirm `jf`

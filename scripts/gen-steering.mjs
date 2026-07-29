@@ -66,6 +66,22 @@ async function listMd(dir) {
   return entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name).sort();
 }
 
+// Collapse a self-referential markdown link — label and target are the same pointer, e.g.
+// `[references/x.md](references/x.md)` or `` [`../jfrog/SKILL.md`](../jfrog/SKILL.md) `` (label
+// backticked, target not — the two slots don't have to agree on backtick style to mean the same thing)
+// — into a single mention, BEFORE pointer rewriting runs. Without this, the label and the target
+// independently match the same pointer regex below (since it also matches bare, non-backticked paths)
+// and each gets rewritten to the same phrase, producing a broken/duplicated pseudo-link like
+// `[the "x" section of the steering](the "x" section of the steering)`. A link whose label differs from
+// its target (e.g. `[environment check](../jfrog/SKILL.md#environment-check)`) is left alone here — only
+// the target should be rewritten, not the label.
+const stripTicks = (s) => (s.startsWith('`') && s.endsWith('`') && s.length > 1 ? s.slice(1, -1) : s);
+export function collapseSelfReferentialLinks(text) {
+  return text.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (m, label, target) =>
+    stripTicks(label) === stripTicks(target) ? label : m
+  );
+}
+
 // Redirect in-skill file pointers so the RENDERED steering is self-consistent in a Power-only install,
 // where skills/ (per-file references and scripts) is NOT shipped. Reference files are concatenated into
 // steering/<name>-references.md (each `references/<x>.md` becomes a `## <x>` section there), so pointers
@@ -125,11 +141,18 @@ export function rewriteScriptPointers(text, name) {
 export function assertNoDeadRefPointers(fileName, text) {
   // Catch both a specific file pointer (references/<x>.md) and any backticked `…references/…` mention
   // (dir or glob). URLs/prose without backticks are ignored — skill content never puts references/ in a URL.
+  // The own-skill scripts/<x> check excludes an already-rewritten `~/.kiro/jfrog-scripts/<name>/<x>` path
+  // the same way rewriteScriptPointers()'s own-skill branch does, so a correctly-rewritten path doesn't
+  // false-positive here. It also has to ignore GEN itself, which every generated file carries verbatim
+  // and which literally contains the substring "scripts/gen-steering.mjs" — that's this build tool's own
+  // path, not a skill's runnable script pointer.
+  const body = text.replace(GEN, '');
   const m =
-    text.match(/references\/[a-z0-9._-]+\.md/i) ||
-    text.match(/`[^`\n]*references\/[^`\n]*`/i) ||
-    text.match(/(?:\.\.\/)+[a-z0-9-]+\/SKILL\.md/i) ||
-    text.match(/(?:\.\.\/)+[a-z0-9-]+\/scripts\/[A-Za-z0-9._-]+/i);
+    body.match(/references\/[a-z0-9._-]+\.md/i) ||
+    body.match(/`[^`\n]*references\/[^`\n]*`/i) ||
+    body.match(/(?:\.\.\/)+[a-z0-9-]+\/SKILL\.md/i) ||
+    body.match(/(?:\.\.\/)+[a-z0-9-]+\/scripts\/[A-Za-z0-9._-]+/i) ||
+    body.match(/(?<!jfrog-)(?:<skill_path>\/scripts\/|(?<![\w/])scripts\/)[A-Za-z0-9._-]+/);
   if (m) {
     throw new Error(
       `steering/${fileName}: unrewritten reference pointer "${m[0]}" — extend rewriteRefPointers()/rewriteScriptPointers() in gen-steering.mjs`
@@ -158,7 +181,10 @@ async function main() {
     // Transform, don't fork: render the SKILL.md body but redirect the in-skill file pointers to what
     // is actually available — references become the bundled `#<name>-references` steering, and script
     // pointers become the concrete ~/.kiro/jfrog-scripts/<name>/ path that install-scripts.mjs fills.
-    const renderedBody = rewriteScriptPointers(rewriteRefPointers(body.trim(), name), name);
+    const renderedBody = rewriteScriptPointers(
+      rewriteRefPointers(collapseSelfReferentialLinks(body.trim()), name),
+      name
+    );
 
     // Signpost the two things a Power cannot carry: per-file references (→ bundled steering) and helper
     // scripts (→ only present via the optional skills install). Data-driven, so future skills get them too.
@@ -209,7 +235,10 @@ async function main() {
         const content = await fs.readFile(path.join(refsDir, r), 'utf8');
         // Rewrite cross-references AND script pointers within reference files too (e.g. a login-flow
         // reference walking through `<skill_path>/scripts/...`), so the bundle is internally consistent.
-        const rendered = rewriteScriptPointers(rewriteRefPointers(content.trim(), name), name);
+        const rendered = rewriteScriptPointers(
+          rewriteRefPointers(collapseSelfReferentialLinks(content.trim()), name),
+          name
+        );
         parts.push(`\n## ${r.replace(/\.md$/, '')}\n`, rendered, '');
       }
       const refsDoc = parts.join('\n');

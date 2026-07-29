@@ -20,7 +20,7 @@ the path by locating this SKILL.md file and using its parent directory.
 path, the top-level JSON key, the env/secret reference syntax, and how a server
 is enabled/verified/listed — varies per agent (Claude Code, Cursor, VS Code, …).
 Those values are NOT hard-coded in this skill. Read
-[the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering) first: it holds the
+the `harness-common` section of the `#jfrog-mcp-management-references` steering first: it holds the
 shared entry shape and a routing table that tells you which SINGLE harness file
 to open (`harness-claude.md`, `harness-cursor.md`, `harness-vscode.md`, …).
 **Read common + exactly one harness file — do NOT open the others.** Then use
@@ -31,7 +31,7 @@ values into your actions.
 
 ## Prerequisites
 
-- **Read the base [the `#jfrog` steering](the `#jfrog` steering) first** — it owns the
+- **Read the base the `#jfrog` steering first** — it owns the
   shared guards this skill reuses (does not repeat): the
   [environment check](the `#jfrog` steering) (run it before the
   first `jf` call and `export JFROG_CLI_USER_AGENT` so these calls show in usage
@@ -65,7 +65,7 @@ credentials or the CLI default server. Do NOT block on resolving a server just
 to run this gate.
 
 Interpret the exit code per
-[the `agent-guard-activation` section of the `#jfrog-mcp-management-references` steering](the `agent-guard-activation` section of the `#jfrog-mcp-management-references` steering).
+the `agent-guard-activation` section of the `#jfrog-mcp-management-references` steering.
 Run it FRESH on every activation — never cache or reuse a previous result.
 
 - **Install and List → Available to install** proceed only on Exit 0 (or a
@@ -81,7 +81,7 @@ Run it FRESH on every activation — never cache or reuse a previous result.
 
 ## Pre-flight (Install and List → Available to install only)
 
-Read [the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering](the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering) for the
+Read the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering for the
 `<REGISTRY_URL>` substitution and the rules for resolving `<JFROG_PROJECT_KEY>`
 and `<SERVER_ID>` before running any `npx @jfrog/agent-guard` command. Removal
 and List → Currently installed read only local config, so they skip this.
@@ -111,14 +111,14 @@ do NOT ask for JFrog project key, server, or package name unless necessary.
 ## Step 1: Determine JFrog project key, server, and target config file
 
 **Server ID and JFrog project key** — resolve both per the Pre-flight rules in
-[the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering](the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering). Pass
+the `agent-guard-common` section of the `#jfrog-mcp-management-references` steering. Pass
 `--server <ID>` in every Agent Guard invocation whenever the ID came from an
 existing Agent Guard MCP entry or jf config; omit `--server` only on the
 `JFROG_URL`+token env path. NEVER guess or assume `default` for the project key.
 
 **Target config file**
 - Use the current harness's row in
-  [the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering) for the file path,
+  the `harness-common` section of the `#jfrog-mcp-management-references` steering for the file path,
   the top-level key, AND that harness's **default scope** — do not assume project
   scope. Most harnesses default to the project-level file (Claude Code
   `.mcp.json`, Cursor `.cursor/mcp.json`), but **VS Code defaults to the
@@ -169,7 +169,7 @@ user can pick a valid name and retry.
 ## Step 3: Plan inputs
 
 `env` values are literals or value references in the harness's syntax (see
-[the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering)). No secret is ever
+the `harness-common` section of the `#jfrog-mcp-management-references` steering). No secret is ever
 entered in chat.
 
 Split Step 2 inputs by `isRequired`:
@@ -184,13 +184,13 @@ value — never take a secret in chat, echo it, or write it into config.
 **Non-secrets** may be a literal or a reference. For the exact syntax and, on
 shell-based harnesses (Claude Code, Cursor), how the user exports/persists the
 variable, see the harness file and
-[the `persisting-env-vars` section of the `#jfrog-mcp-management-references` steering](the `persisting-env-vars` section of the `#jfrog-mcp-management-references` steering). (VS Code
+the `persisting-env-vars` section of the `#jfrog-mcp-management-references` steering. (VS Code
 prompts for `inputs` values on first start — no shell export.)
 
 ## Step 4: Write the config entry
 
 Write the Agent Guard entry into the target config from Step 1, following
-[the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering): it has the exact
+the `harness-common` section of the `#jfrog-mcp-management-references` steering: it has the exact
 JSON (`type: stdio`, `command`/`args`/`_JF_ARGS`), the per-harness top-level key
 (`mcpServers` for Claude Code/Cursor, `servers` for VS Code) and env/secret
 reference syntax, and the VS Code `inputs[]` shape.
@@ -208,7 +208,7 @@ Guardrails (identical everywhere):
 ## Step 4a: Enable and verify the entry (mandatory)
 
 Enable the entry per the current harness's **How to enable** row in
-[the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering) — the mechanism
+the `harness-common` section of the `#jfrog-mcp-management-references` steering — the mechanism
 differs per agent (Claude Code pre-approves via `enabledMcpjsonServers` in
 `.claude/settings.local.json`; Cursor/VS Code discover the file and enable via
 their MCP UI). If a pre-approval write fails, continue — the user approves on
@@ -224,7 +224,7 @@ Then tell the user:
 4. Verify per the harness's **Verify** column. **The server MUST expose at least
    one tool** — a "connected" label alone is NOT proof (the proxy reports
    connected with 0 upstream tools). Empty tool list = Failed; see the "0 tools"
-   entry in [the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering](the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering).
+   entry in the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering.
 
 ## Step 5: Authenticate OAuth MCPs (auto, after Step 4)
 
@@ -251,7 +251,7 @@ Outcomes:
 - **`expected 401, got 200`** — MCP is anonymous (no auth needed); ignore.
 - **Any other error** — paste it to the user verbatim and stop.
 
-See [the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering](the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering)
+See the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering
 for key rules and troubleshooting.
 
 ---
@@ -279,7 +279,7 @@ files themselves — read those first; live connection status is an optional
 add-on where the agent provides it.
 
 1. Read the servers map directly from the current harness's config files (per
-   [the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering) — project and
+   the `harness-common` section of the `#jfrog-mcp-management-references` steering — project and
    user scope, under that harness's top-level key) — use the file-read tool or a
    single `jq` invocation, NOT chained `python3 -c "..."` pipes. For each entry
    whose `command` is `npx` and whose `args` include `@jfrog/agent-guard`, show:
@@ -324,7 +324,7 @@ is the install identifier (passed to `--inspect --mcp`) and resolves to
    `(installed)` if EITHER matches an installed entry's JSON key OR its `mcp=`
    value — still show it so the user can reinstall/update.
 
-See [the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering](the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering)
+See the `key-rules-and-troubleshooting` section of the `#jfrog-mcp-management-references` steering
 for key rules and troubleshooting.
 
 ---
@@ -336,7 +336,7 @@ on Step 0 Exit 2 (registry disabled).
 
 1. **Locate the entry across both scopes first.** Read the servers map from BOTH
    the project and user config files for the current harness (per
-   [the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering), under that
+   the `harness-common` section of the `#jfrog-mcp-management-references` steering, under that
    harness's top-level key), and list every exact match by name with its scope.
    Then:
    - Exactly one match → delete that entry.
@@ -368,7 +368,7 @@ on Step 0 Exit 2 (registry disabled).
      the file, or surfacing the surrounding entries — read the minimum needed to
      locate the key and remove it. If the file is absent, skip silently.
 3. **Mandatory:** tell the user the exact restart action from the harness's
-   **Restart** column (per [the `harness-common` section of the `#jfrog-mcp-management-references` steering](the `harness-common` section of the `#jfrog-mcp-management-references` steering))
+   **Restart** column (per the `harness-common` section of the `#jfrog-mcp-management-references` steering)
    — not just "restart the agent" — so the removed entry stops loading.
 
 > **References:** deep material for this skill ships as the `#jfrog-mcp-management-references` steering (each former reference file is a `## <file>` section there). Load it on demand.

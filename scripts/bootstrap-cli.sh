@@ -14,13 +14,16 @@
 #
 # Options / env:
 #   --workspace                  install into ./.kiro/skills (this workspace) instead of ~/.kiro/skills
+#   KIRO_HOME=<dir>              give the CLI its own profile (e.g. ~/.kiro-cli) instead of ~/.kiro, so
+#                                 its skills never land where the IDE reads. Ignored with --workspace.
 #   JFROG_KIRO_REPO=owner/repo   override source repo   (default: jfrog/jfrog-kiro-power)
 #   JFROG_KIRO_REF=<branch/tag>  override source ref    (default: latest release tag, else main)
 #   KIRO_POWER_SRC=<dir>         install from a local checkout instead of fetching (offline/testing)
 #
-# Installs globally into ~/.kiro by default (JFrog available in every kiro-cli session). Pass
-# --workspace to scope into ./.kiro instead (avoids duplicating the IDE power's steering when you use
-# both surfaces; note the CLI must then be run from this directory). Phase 1 = skills only (no MCP).
+# Installs globally into ~/.kiro (or $KIRO_HOME) by default (JFrog available in every kiro-cli
+# session). Pass --workspace to scope into ./.kiro instead (avoids duplicating the IDE power's
+# steering when you use both surfaces; note the CLI must then be run from this directory). Phase 1 =
+# skills only (no MCP).
 set -euo pipefail
 
 REPO="${JFROG_KIRO_REPO:-jfrog/jfrog-kiro-power}"
@@ -45,8 +48,12 @@ else
   [ -n "$REF" ] || REF="main"
 fi
 
+# Workspace scope always wins (explicit --workspace). Otherwise KIRO_HOME wins over the default
+# ~/.kiro, so a KIRO_HOME profile never gets skills written to ~/.kiro too (matches install-cli.mjs).
 if [ "$WORKSPACE" = true ]; then
   SKILLS_DEST="$(pwd)/.kiro/skills"
+elif [ -n "${KIRO_HOME:-}" ]; then
+  SKILLS_DEST="${KIRO_HOME/#\~/$HOME}/skills"
 else
   SKILLS_DEST="$HOME/.kiro/skills"
 fi

@@ -50,7 +50,7 @@ Continue with the skill when either holds:
 
 - The user explicitly asked to use the JFrog Agent Guard anyway; or
 - The workspace is already on the Agent Guard — an existing entry in the
-  harness's MCP config (see [harness-common.md](harness-common.md)) runs
+  harness's MCP config (see harness-common.md) runs
   `@jfrog/agent-guard`.
 
 
@@ -66,7 +66,7 @@ Terminology used throughout these skills:
 
 - **project (workspace)** — the current working directory (CWD) where the agent
   is running. Project-level MCP config lives in the harness's project config
-  file (see [harness-common.md](harness-common.md); e.g. `.mcp.json` for Claude
+  file (see harness-common.md; e.g. `.mcp.json` for Claude
   Code).
 - **JFrog project key** (`<JFROG_PROJECT_KEY>`) — the key identifying a JFrog
   project. This is distinct from the workspace/CWD.
@@ -90,7 +90,7 @@ Wherever `<REGISTRY_URL>` appears, substitute the value of the
 
 - **`<JFROG_PROJECT_KEY>` is always mandatory.** Resolve via the project
   chain: existing Agent Guard MCP entries (any harness config file per
-  [harness-common.md](harness-common.md); `_JF_ARGS` → `project=`) →
+  harness-common.md; `_JF_ARGS` → `project=`) →
   `JF_PROJECT` env var → ASK the user. If none resolves, STOP and ask — NEVER
   guess, NEVER assume `default`, NEVER invent JFrog project keys.
 
@@ -100,7 +100,7 @@ Wherever `<REGISTRY_URL>` appears, substitute the value of the
   MCP-specific step of reading an existing Agent Guard entry first. Resolve in
   order, stop at the first match:
   1. An existing Agent Guard MCP entry's `--server <ID>` (project or user
-     config, per [harness-common.md](harness-common.md)) — reuse it.
+     config, per harness-common.md) — reuse it.
   2. `JFROG_URL` + `JFROG_ACCESS_TOKEN` set in the env (the Step 0 check and the
      agent guard also accept the legacy `JF_URL` + `JF_ACCESS_TOKEN` pair as a
      fallback) — use them and do NOT pass `--server` (the agent guard reads the
@@ -127,7 +127,7 @@ Wherever `<REGISTRY_URL>` appears, substitute the value of the
   > ID.
 - The commands need network access to the npm registry and the JFrog
   platform. Grant the matching runtime permission (see
-  [runtime-permissions.md](runtime-permissions.md)); a corporate proxy, VPN, or
+  runtime-permissions.md); a corporate proxy, VPN, or
   blocked registry can also surface as `Forbidden` / `403` errors.
 
 Once both are determined, proceed. If either is still unknown, STOP — do NOT
@@ -139,7 +139,7 @@ run the command with guesses.
 # Harness: Claude Code
 
 Claude Code-specific config for the `jfrog-mcp-management` skill. Read this
-together with [harness-common.md](harness-common.md) (shared entry shape and
+together with harness-common.md (shared entry shape and
 success criterion). You reached this file because the harness is Claude Code
 (`CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT`).
 
@@ -161,7 +161,7 @@ success criterion). You reached this file because the harness is Claude Code
 
 Plain `${VAR_NAME}`, resolved from the shell that launched Claude Code. For
 `Bearer` headers: `"Bearer ${TOKEN}"`. The user must export the variable in the
-launching shell (see [persisting-env-vars.md](persisting-env-vars.md)); values
+launching shell (see persisting-env-vars.md); values
 are picked up on next launch. Never write a raw secret — always `${VAR}`.
 
 ## Enable
@@ -191,7 +191,7 @@ metadata, read `mcpServers` from `.mcp.json` (project) and `~/.claude.json`
 row) → read `Capabilities:`. It MUST list at least one tool. Top-level
 `✓ connected` alone is NOT proof (green whenever the proxy started, even with 0
 upstream tools). Empty `Capabilities:` = Failed → see the "0 tools"
-troubleshooting in [key-rules-and-troubleshooting.md](key-rules-and-troubleshooting.md).
+troubleshooting in key-rules-and-troubleshooting.md.
 
 ## Approval / stuck-state precedence
 
@@ -241,9 +241,9 @@ harness files.
 
 | Detected harness | Env signals | Read THIS file (and no other harness file) |
 | --- | --- | --- |
-| Claude Code | `CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT` | [harness-claude.md](harness-claude.md) |
-| Cursor | `CURSOR_AGENT` / `CURSOR_CLI` / `CURSOR_TRACE_ID` | [harness-cursor.md](harness-cursor.md) |
-| VS Code editor | editor is VS Code (`TERM_PROGRAM=vscode`) **and no `CURSOR_*` var is set** | [harness-vscode.md](harness-vscode.md) |
+| Claude Code | `CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT` | harness-claude.md |
+| Cursor | `CURSOR_AGENT` / `CURSOR_CLI` / `CURSOR_TRACE_ID` | harness-cursor.md |
+| VS Code editor | editor is VS Code (`TERM_PROGRAM=vscode`) **and no `CURSOR_*` var is set** | harness-vscode.md |
 | anything else | none of the above | **Fallback** section below — no harness file exists |
 
 Once you know your harness, use ONLY these fields from its file: `Config files`
@@ -287,7 +287,7 @@ syntax come from your harness file.
   (those bypass the Agent Guard).
 - `--yes` and `--registry <URL>` MUST precede `@jfrog/agent-guard` in `args`.
 - `--server <ID>` in `args` is conditional: drop both array elements only on the
-  `JFROG_URL`+token env path (see [agent-guard-common.md](agent-guard-common.md)).
+  `JFROG_URL`+token env path (see agent-guard-common.md).
 - Never write a raw secret — always a value reference in the harness's syntax.
 - `_JF_ARGS` values are substituted raw (no URL-encoding), which is safe only
   because both are free of query-string reserved chars (`&`, `=`, `+`, space): a
@@ -323,7 +323,7 @@ file is worse than asking.
 # Harness: Cursor
 
 Cursor-specific config for the `jfrog-mcp-management` skill. Read this together
-with [harness-common.md](harness-common.md) (shared entry shape and success
+with harness-common.md (shared entry shape and success
 criterion). You reached this file because the harness is Cursor (`CURSOR_AGENT`
 / `CURSOR_CLI` / `CURSOR_TRACE_ID`).
 
@@ -343,7 +343,7 @@ criterion). You reached this file because the harness is Cursor (`CURSOR_AGENT`
 
 `${env:VAR_NAME}`, resolved from the shell that launched Cursor. For `Bearer`
 headers: `"Bearer ${env:TOKEN}"`. The user must export the variable in the
-launching shell (see [persisting-env-vars.md](persisting-env-vars.md)); values
+launching shell (see persisting-env-vars.md); values
 are picked up on next launch. If a required `${env:VAR}` is unset the Agent
 Guard fails at startup — confirm the export before restart. Never write a raw
 secret.
@@ -379,13 +379,13 @@ tool descriptor files are actually present at:
 NEVER ask the user to inspect these files themselves — after they enable the MCP,
 **offer to check the `tools/` directory for them**. If `tools/` is empty or
 missing after a `Developer: Reload Window`, treat as Failed → see the "0 tools"
-troubleshooting in [key-rules-and-troubleshooting.md](key-rules-and-troubleshooting.md).
+troubleshooting in key-rules-and-troubleshooting.md.
 
 ## Notes
 
 Cursor has no `enabledMcpjsonServers`-style precedence files — enable/disable is
 the UI toggle above. OAuth `--login` in a sandbox must run with `all`
-permissions (see [runtime-permissions.md](runtime-permissions.md)).
+permissions (see runtime-permissions.md).
 
 
 ## harness-vscode
@@ -393,7 +393,7 @@ permissions (see [runtime-permissions.md](runtime-permissions.md)).
 # Harness: VS Code (GitHub Copilot)
 
 VS Code-specific config for the `jfrog-mcp-management` skill. Read this together
-with [harness-common.md](harness-common.md) (shared entry shape and success
+with harness-common.md (shared entry shape and success
 criterion). You reached this file because the harness is the VS Code editor
 (`TERM_PROGRAM=vscode`, no `CURSOR_*` set). This targets the VS Code **editor**
 with Copilot MCP support — not the standalone GitHub Copilot terminal CLI, which
@@ -429,7 +429,7 @@ silently ignores.
 
 A top-level **`inputs` array**, referenced from `env` as `"${input:<id>}"`. VS
 Code prompts for each value on first start and stores it (OS keychain) — there
-is no shell export, so [persisting-env-vars.md](persisting-env-vars.md) does not
+is no shell export, so persisting-env-vars.md does not
 apply here.
 
 Full entry shape (note the sibling `inputs` array alongside `servers`):
@@ -495,7 +495,7 @@ started — re-run Enable.
 Ask the user to confirm in `MCP: List Servers` that the server is **Running with
 at least one tool**. "Discovered 0 tools" is NOT healthy — the Agent Guard
 started but the upstream MCP didn't. Treat 0 tools as Failed → see the "0 tools"
-troubleshooting in [key-rules-and-troubleshooting.md](key-rules-and-troubleshooting.md).
+troubleshooting in key-rules-and-troubleshooting.md.
 
 ## Remove cleanup
 
@@ -558,14 +558,14 @@ Reference for the Install and List flows of the `jfrog-mcp-management` skill.
   `--inspect` read the JSON it prints on stdout directly (or with a single `jq`
   filter), never via `python3`.
 - NEVER write a raw secret into any MCP config file (see
-  [harness-common.md](harness-common.md) for each harness's file) — always use
+  harness-common.md for each harness's file) — always use
   `${VAR_NAME}`. NEVER show tokens / API keys.
 - NEVER try multiple servers — ask the user to pick one.
 
 ## Troubleshooting
 
 Items below are harness-agnostic unless they point into the current harness's
-row in [harness-common.md](harness-common.md).
+row in harness-common.md.
 
 - **"connected" but 0 tools** (empty tool/capability list in the harness's
   verify view — e.g. Claude Code's `/mcp` `Capabilities:`) — agent guard proxy
@@ -587,7 +587,7 @@ row in [harness-common.md](harness-common.md).
   — on harnesses that pre-approve via files (e.g. Claude Code), approval state
   lives in plain JSON arrays read at session start (nothing cached, so `npm
   cache clean` is unrelated). Check that harness's approval-precedence list in
-  [harness-common.md](harness-common.md) and remove the entry from every file
+  harness-common.md and remove the entry from every file
   that lists it, then restart. On UI-toggle harnesses (Cursor, VS Code) there is
   no such file — disable/stop the server in the harness's MCP view instead.
 - **Agent Guard: `multiple/no JFrog server configured`** (the agent guard

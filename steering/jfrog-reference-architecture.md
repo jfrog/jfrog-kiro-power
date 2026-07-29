@@ -26,7 +26,7 @@ Planning skill for topology, sizing, and deployment. Answers must come from
 
 **Citations:** Use the `URL:` line from the relevant section in the fetched content (public HTML URL). You may note content was read from `llms-full.txt`.
 
-For fetch URLs, size thresholds, and the fallback ladder, see [the `doc-access` section of the `#jfrog-reference-architecture-references` steering](the `doc-access` section of the `#jfrog-reference-architecture-references` steering).
+For fetch URLs, size thresholds, and the fallback ladder, see the `doc-access` section of the `#jfrog-reference-architecture-references` steering.
 
 ## Gotchas
 
@@ -36,7 +36,7 @@ For fetch URLs, size thresholds, and the fallback ladder, see [the `doc-access` 
 | `small` template recommended for production | Re-read production warnings in the fetched Artifactory/Xray sizing sections |
 | SaaS section missing or 404 | SaaS paths use prefix **`jfrog-saas`**, not `saas` |
 | HA storage guidance wrong | Per ref arch: **`cluster-file-system`** or object storage — not `file-system` for HA |
-| `WebFetch` blocked, truncated, or over size limits | Request `full_network`; downgrade per [the `doc-access` section of the `#jfrog-reference-architecture-references` steering](the `doc-access` section of the `#jfrog-reference-architecture-references` steering) |
+| `WebFetch` blocked, truncated, or over size limits | Request `full_network`; downgrade per the `doc-access` section of the `#jfrog-reference-architecture-references` steering |
 
 ## Session bootstrap
 
@@ -127,7 +127,7 @@ SaaS paths use prefix **`jfrog-saas`**, not `saas`.
 
 ## When to read reference files
 
-- **Fetch ladder, Markdown URL rule, size governance:** [the `doc-access` section of the `#jfrog-reference-architecture-references` steering](the `doc-access` section of the `#jfrog-reference-architecture-references` steering)
+- **Fetch ladder, Markdown URL rule, size governance:** the `doc-access` section of the `#jfrog-reference-architecture-references` steering
 
 ## Examples
 

@@ -28,7 +28,7 @@ pruning, the file cannot.
 > the session-start hook; never write or hand-edit it.
 
 > **Not** the workspace binding file — that lives at
-> `.jfrog/local/package-resolution.json` (see [`workspace-binding.md`](workspace-binding.md)).
+> `.jfrog/local/package-resolution.json` (see `workspace-binding.md`).
 
 ## Shape
 
@@ -129,7 +129,7 @@ These belong elsewhere and the skill must not look for them here:
 # `jf setup` Command Reference
 
 Configures a local PM to resolve from / publish to Artifactory. CLI install
-and server config: [the `#jfrog` steering](the `#jfrog` steering).
+and server config: the `#jfrog` steering.
 
 ## Invocation
 

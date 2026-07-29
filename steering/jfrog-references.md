@@ -1954,7 +1954,7 @@ Use this reference when producing a **pretty, self-contained HTML file** (single
 
 ## Authoritative source
 
-- **Brand guidelines**: [https://jfrog.com/brand-guidelines/](https://jfrog.com/brand-guidelines/) — rules for JFrog Marks, nominative use, naming, and what not to do (e.g. do not copy JFrog’s site “look and feel” wholesale, do not modify official logos, do not use the favicon on your pages).
+- **Brand guidelines**: https://jfrog.com/brand-guidelines/ — rules for JFrog Marks, nominative use, naming, and what not to do (e.g. do not copy JFrog’s site “look and feel” wholesale, do not modify official logos, do not use the favicon on your pages).
 - **Media Kit**: linked from that page (logos in AI/PNG). Use official assets only if the user needs a logo; scale proportionally and add clarifying context per the guidelines.
 
 ## Naming and copy
