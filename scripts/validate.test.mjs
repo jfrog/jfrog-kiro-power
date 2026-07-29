@@ -239,6 +239,15 @@ test('rewriteScriptPointers redirects <skill_path>/scripts and bare scripts/ to 
   );
 });
 
+// A bare `scripts/<file>` mention embedded inside an UNRELATED path (e.g. skill prose describing some
+// other tool's directory layout) must be left untouched — it has nothing to do with this skill's own
+// scripts/ dir, and rewriting it produces a nonsense mixed path like
+// `modules/package-resolution/~/.kiro/jfrog-scripts/<name>/print-policy.mjs`.
+test('rewriteScriptPointers leaves an unrelated embedded scripts/<file> path untouched', () => {
+  const text = 'renderer is available on demand via `modules/package-resolution/scripts/print-policy.mjs`';
+  assert.equal(rewriteScriptPointers(text, 'jfrog-setup-package-managers'), text);
+});
+
 test('rewriteScriptPointers redirects a cross-skill scripts/<file> to the OTHER skill\'s install path', () => {
   const out = rewriteScriptPointers(
     'mirrors `../../jfrog/scripts/check-environment.sh` detect_harness()',

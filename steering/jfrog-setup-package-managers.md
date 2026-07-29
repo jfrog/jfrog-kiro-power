@@ -16,7 +16,7 @@ lets the hook re-apply on later sessions.
 
 **Session-start hook:** resolves repo keys per package type, injects the
 "Resolved URLs for this session" table, refreshes the global cache. The same
-renderer is available on demand via `modules/package-resolution/~/.kiro/jfrog-scripts/jfrog-setup-package-managers/print-policy.mjs` (the enforce
+renderer is available on demand via `modules/package-resolution/scripts/print-policy.mjs` (the enforce
 notice embeds the exact command), so the policy can be loaded after setup.
 
 **This skill:** reads that output, runs `jf setup`, and persists the workspace
@@ -165,7 +165,7 @@ Cap at **2 answers per PM**, then abort. User may override repo only, never serv
 ## Step 4 — Load the routing policy
 
 If this session started with the "routing NOT READY" (enforce) notice, that
-notice includes a refresh command (`node <plugin>/modules/package-resolution/~/.kiro/jfrog-scripts/jfrog-setup-package-managers/print-policy.mjs`).
+notice includes a refresh command (`node <plugin>/modules/package-resolution/scripts/print-policy.mjs`).
 After Step 3 succeeds, run that exact command and treat its stdout as the
 authoritative, now-current policy — it prints the resolved Artifactory URLs and
 hard rules. Continue the original request using those URLs.

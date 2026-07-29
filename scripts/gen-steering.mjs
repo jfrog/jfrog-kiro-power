@@ -100,13 +100,22 @@ export function rewriteRefPointers(text, name) {
 // to the concrete on-disk path so the always-loaded steering can run them without a registered skill.
 // Cross-skill script pointers (`../<skill>/scripts/<file>`) are redirected to that OTHER skill's install
 // path — rewritten first, for the same reason as the cross-skill rules in rewriteRefPointers() above.
+//
+// The bare `scripts/<file>` branch requires the match NOT be preceded by `/` or a word character
+// (`(?<![\w/])`) — otherwise it also matches `scripts/` embedded inside an unrelated path, e.g. skill
+// prose mentioning some other tool's layout like `modules/package-resolution/scripts/print-policy.mjs`
+// (nothing to do with THIS skill's own scripts/ dir). Without that guard it mangles the unrelated path
+// into nonsense like `modules/package-resolution/~/.kiro/jfrog-scripts/<name>/print-policy.mjs`.
 // Deterministic string transform — no LLM, and skills/ is never edited.
 export function rewriteScriptPointers(text, name) {
   return text
     .replace(/(?:\.\.\/)+([a-z0-9-]+)\/scripts\/([A-Za-z0-9._-]+)/gi, `~/.kiro/jfrog-scripts/$1/$2`)
     // negative lookbehind: skip `scripts/` that's already part of an injected `jfrog-scripts/` path
     // from the cross-skill rewrite above, so it isn't matched (and mangled) a second time here.
-    .replace(/(?<!jfrog-)(?:<skill_path>\/)?scripts\/([A-Za-z0-9._-]+)/g, `~/.kiro/jfrog-scripts/${name}/$1`);
+    .replace(
+      /(?<!jfrog-)(?:<skill_path>\/scripts\/|(?<![\w/])scripts\/)([A-Za-z0-9._-]+)/g,
+      `~/.kiro/jfrog-scripts/${name}/$1`
+    );
 }
 
 // Build guard: after rewriting, no on-disk `references/<x>.md`, `SKILL.md`, or `scripts/<x>` pointer may
