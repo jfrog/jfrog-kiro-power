@@ -69,7 +69,7 @@ Kiro runs this section automatically the first time the power is used.
    knowledge — the only thing not bundled is the skills' runnable helper **scripts**
    (login/environment-check). When a request needs one and it is not yet on disk, install **just the
    scripts** (no `SKILL.md`, so no skill is registered and nothing duplicates the steering). They come
-   from the **same pinned version** (`v0.16.0`) and land in `~/.kiro/jfrog-scripts/<skill>/`; this is the
+   from the **same pinned version** (`v0.20.0`) and land in `~/.kiro/jfrog-scripts/<skill>/`; this is the
    **only** action that touches the network. **Confirm once with the user, then install globally.** Be
    graceful: if the user declines or is offline, skip it — the steering still works — and simply retry the
    next time a script is needed.
@@ -87,7 +87,7 @@ Kiro runs this section automatically the first time the power is used.
 
    ```bash
    TMP="$(mktemp -d)"
-   curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.16.0 | tar -xz -C "$TMP"
+   curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.20.0 | tar -xz -C "$TMP"
    for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
      mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
    rm -rf "$TMP"
@@ -97,7 +97,7 @@ Kiro runs this section automatically the first time the power is used.
 
    ```powershell
    $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
-   Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.16.0 -OutFile "$tmp\s.zip"
+   Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.20.0 -OutFile "$tmp\s.zip"
    Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
    Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
      $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null
@@ -133,7 +133,7 @@ so the id matches — the agent activates the power by this name.
   2. Or **stage the installed dir** to match a GitHub install (local dev workaround):
      ```bash
      mkdir -p ~/.kiro/powers/installed/jfrog
-     cp POWER.md ~/.kiro/powers/installed/jfrog/
+     cp POWER.md mcp.json ~/.kiro/powers/installed/jfrog/
      rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
      # then fully quit & reopen Kiro
      ```
@@ -168,7 +168,9 @@ syntax, platform conventions, system repositories, and per-domain gotchas, load 
 steering file.
 
 > If the JFrog MCP server is available in your Kiro environment, the `jfrog` steering will prefer MCP
-> tools when present; configuring that MCP server is out of scope for this phase of the power.
+> tools when present. This power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` —
+> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves; beyond
+> that, connecting/configuring the MCP server itself is out of scope for this phase of the power.
 
 ## Server Selection Rules
 

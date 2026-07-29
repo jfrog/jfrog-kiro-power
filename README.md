@@ -11,7 +11,10 @@ Both enable AI-assisted JFrog Platform workflows — searching artifacts, managi
 users/groups, setting up projects, checking package safety, and querying security metadata.
 
 > **Phase 1 — skills only.** Both surfaces ship the JFrog skill knowledge and drive the platform through
-> the `jf` CLI. The JFrog remote **MCP server** and **Agent Guard** arrive in later phases.
+> the `jf` CLI. The JFrog remote **MCP server** and **Agent Guard** arrive in later phases. The IDE Power
+> still bundles `mcp.json`, pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL`
+> environment variable to your platform hostname so it resolves once the MCP server is available; no
+> manual edit of `mcp.json` is needed.
 
 ## How skills are delivered on Kiro
 
@@ -76,7 +79,8 @@ The JFrog steering ships with the power and loads automatically — nothing else
 it.
 
 > **Smoothest activation:** install from **GitHub** rather than a local folder. Kiro copies the power's
-> `POWER.md` + `steering/` into `~/.kiro/powers/installed/jfrog/`, so the agent reliably activates it.
+> `POWER.md` + `mcp.json` + `steering/` into `~/.kiro/powers/installed/jfrog/`, so the agent reliably
+> activates it.
 > A local **folder** import is referenced in place and may not populate `installed/`, which can prevent
 > activation — see [Troubleshooting Installation](POWER.md#troubleshooting-installation) in POWER.md.
 
@@ -106,7 +110,7 @@ npm run install-scripts -- --workspace # -> ./.kiro/jfrog-scripts   (this worksp
 
 ```bash
 TMP="$(mktemp -d)"
-curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.16.0 | tar -xz -C "$TMP"
+curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.20.0 | tar -xz -C "$TMP"
 for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
   mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
 rm -rf "$TMP"
@@ -116,7 +120,7 @@ rm -rf "$TMP"
 
 ```powershell
 $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
-Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.16.0 -OutFile "$tmp\s.zip"
+Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.20.0 -OutFile "$tmp\s.zip"
 Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
 Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
   $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null

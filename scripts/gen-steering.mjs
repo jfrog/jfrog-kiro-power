@@ -71,8 +71,21 @@ async function listMd(dir) {
 // steering/<name>-references.md (each `references/<x>.md` becomes a `## <x>` section there), so pointers
 // are redirected to that bundle. Deterministic string transform — no LLM, and skills/ is never edited.
 // (JFrog skill content only ever writes `references/<file>.md` / `references/*.md`, never inside URLs.)
+//
+// Cross-skill pointers (`../<skill>/references/<x>.md`, `../<skill>/SKILL.md`, one or more `../` up)
+// are rewritten FIRST, to the OTHER skill's bundle/steering — otherwise the same-skill rules below would
+// still match the trailing `references/<x>.md` / `SKILL.md` and misattribute it to the current skill.
 export function rewriteRefPointers(text, name) {
   return text
+    // cross-skill file pointer: `../<skill>/references/<x>.md`, `../../<skill>/references/<x>.md`
+    .replace(/`?(?:\.\.\/)+([a-z0-9-]+)\/references\/([a-z0-9._-]+)\.md`?/gi,
+      (_m, skill, base) => `the \`${base}\` section of the \`#${skill}-references\` steering`)
+    // backticked cross-skill dir/glob/ellipsis mention: `../<skill>/references/`, `.../*`, `.../…`
+    .replace(/`(?:\.\.\/)+([a-z0-9-]+)\/references\/(?:\*(?:\.md)?|…)?`/gi,
+      (_m, skill) => `the \`#${skill}-references\` steering`)
+    // cross-skill SKILL.md pointer (optionally with a `#anchor`): `../<skill>/SKILL.md`
+    .replace(/`?(?:\.\.\/)+([a-z0-9-]+)\/SKILL\.md(?:#[\w-]+)?`?/gi,
+      (_m, skill) => `the \`#${skill}\` steering`)
     // `references/<x>.md`, `<skill_path>/references/<x>.md`  ->  the concatenated section in the bundle
     .replace(/`?(?:<skill_path>\/)?references\/([a-z0-9._-]+)\.md`?/gi,
       (_m, base) => `the \`${base}\` section of the \`#${name}-references\` steering`)
@@ -85,22 +98,32 @@ export function rewriteRefPointers(text, name) {
 // (~/.kiro/jfrog-scripts/<name>/<script>), because the Power/steering ships no skills/ tree. The skill
 // body references scripts as `<skill_path>/scripts/<file>` or bare `scripts/<file>`; both are rewritten
 // to the concrete on-disk path so the always-loaded steering can run them without a registered skill.
+// Cross-skill script pointers (`../<skill>/scripts/<file>`) are redirected to that OTHER skill's install
+// path — rewritten first, for the same reason as the cross-skill rules in rewriteRefPointers() above.
 // Deterministic string transform — no LLM, and skills/ is never edited.
 export function rewriteScriptPointers(text, name) {
-  const base = `~/.kiro/jfrog-scripts/${name}`;
-  return text.replace(/(?:<skill_path>\/)?scripts\/([A-Za-z0-9._-]+)/g, `${base}/$1`);
+  return text
+    .replace(/(?:\.\.\/)+([a-z0-9-]+)\/scripts\/([A-Za-z0-9._-]+)/gi, `~/.kiro/jfrog-scripts/$1/$2`)
+    // negative lookbehind: skip `scripts/` that's already part of an injected `jfrog-scripts/` path
+    // from the cross-skill rewrite above, so it isn't matched (and mangled) a second time here.
+    .replace(/(?<!jfrog-)(?:<skill_path>\/)?scripts\/([A-Za-z0-9._-]+)/g, `~/.kiro/jfrog-scripts/${name}/$1`);
 }
 
-// Build guard: after rewriting, no on-disk `references/<x>.md` pointer may survive in a generated file
-// (it would be a dead link in a Power-only install). Throws so a future skill introducing an unmatched
-// pointer shape fails the build loudly instead of shipping broken steering.
+// Build guard: after rewriting, no on-disk `references/<x>.md`, `SKILL.md`, or `scripts/<x>` pointer may
+// survive in a generated file (it would be a dead link in a Power-only install, or a dead file path in a
+// Power-only install for scripts/SKILL.md). Throws so a future skill introducing an unmatched pointer
+// shape fails the build loudly instead of shipping broken/misattributed steering.
 export function assertNoDeadRefPointers(fileName, text) {
   // Catch both a specific file pointer (references/<x>.md) and any backticked `…references/…` mention
   // (dir or glob). URLs/prose without backticks are ignored — skill content never puts references/ in a URL.
-  const m = text.match(/references\/[a-z0-9._-]+\.md/i) || text.match(/`[^`\n]*references\/[^`\n]*`/i);
+  const m =
+    text.match(/references\/[a-z0-9._-]+\.md/i) ||
+    text.match(/`[^`\n]*references\/[^`\n]*`/i) ||
+    text.match(/(?:\.\.\/)+[a-z0-9-]+\/SKILL\.md/i) ||
+    text.match(/(?:\.\.\/)+[a-z0-9-]+\/scripts\/[A-Za-z0-9._-]+/i);
   if (m) {
     throw new Error(
-      `steering/${fileName}: unrewritten reference pointer "${m[0]}" — extend rewriteRefPointers() in gen-steering.mjs`
+      `steering/${fileName}: unrewritten reference pointer "${m[0]}" — extend rewriteRefPointers()/rewriteScriptPointers() in gen-steering.mjs`
     );
   }
 }
@@ -175,8 +198,10 @@ async function main() {
       ];
       for (const r of refs) {
         const content = await fs.readFile(path.join(refsDir, r), 'utf8');
-        // Rewrite cross-references between reference files too, so the bundle is internally consistent.
-        parts.push(`\n## ${r.replace(/\.md$/, '')}\n`, rewriteRefPointers(content.trim(), name), '');
+        // Rewrite cross-references AND script pointers within reference files too (e.g. a login-flow
+        // reference walking through `<skill_path>/scripts/...`), so the bundle is internally consistent.
+        const rendered = rewriteScriptPointers(rewriteRefPointers(content.trim(), name), name);
+        parts.push(`\n## ${r.replace(/\.md$/, '')}\n`, rendered, '');
       }
       const refsDoc = parts.join('\n');
       assertNoDeadRefPointers(`${name}-references.md`, refsDoc);

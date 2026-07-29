@@ -2230,7 +2230,7 @@ another server on error** — see SKILL.md **Server selection rules**.
 ### 1. Verify server and register session
 
 ```bash
-bash <skill_path>/scripts/jfrog-login-register-session.sh "https://mycompany.jfrog.io"
+bash ~/.kiro/jfrog-scripts/jfrog/jfrog-login-register-session.sh "https://mycompany.jfrog.io"
 ```
 
 The script pings the server, generates a session UUID, and registers it with
@@ -2264,7 +2264,7 @@ Wait for the user to confirm. Do not poll automatically.
 ### 3. Retrieve token, save credentials, verify
 
 ```bash
-bash <skill_path>/scripts/jfrog-login-save-credentials.sh \
+bash ~/.kiro/jfrog-scripts/jfrog/jfrog-login-save-credentials.sh \
   "https://mycompany.jfrog.io" \
   "<SESSION_UUID from step 1>"
 ```

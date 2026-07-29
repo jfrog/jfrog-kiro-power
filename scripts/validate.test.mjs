@@ -151,6 +151,44 @@ test('rewriteRefPointers uses the skill name for the bundle and leaves non-refer
   assert.equal(rewriteRefPointers(untouched, 'jfrog'), untouched, 'URLs / non-target text are not rewritten');
 });
 
+// Some skills reference ANOTHER skill's references/SKILL.md (e.g. jfrog-setup-package-managers pointing
+// back at the base `jfrog` skill). These must redirect to the OTHER skill's bundle/steering, not the
+// current skill's — using the current skill's name here would misattribute the section.
+test('rewriteRefPointers redirects cross-skill references/<x>.md to the OTHER skill\'s bundle', () => {
+  const out = rewriteRefPointers(
+    'see [`../jfrog/references/jfrog-login-flow.md`](../jfrog/references/jfrog-login-flow.md)',
+    'jfrog-setup-package-managers'
+  );
+  assert.match(out, /`jfrog-login-flow` section of the `#jfrog-references` steering/);
+  assert.doesNotMatch(out, /\.\.\/jfrog\/references/, 'no residual ../jfrog/references pointer remains');
+  const nested = rewriteRefPointers(
+    'see [`../../jfrog/references/jfrog-login-flow.md`](../../jfrog/references/jfrog-login-flow.md)',
+    'jfrog-setup-package-managers'
+  );
+  assert.match(nested, /`#jfrog-references` steering/);
+});
+
+test('rewriteRefPointers redirects the cross-skill references glob/ellipsis mention', () => {
+  const out = rewriteRefPointers('out of scope: CLI install/login (`../jfrog/references/…`).', 'jfrog-setup-package-managers');
+  assert.match(out, /`#jfrog-references` steering/);
+  assert.doesNotMatch(out, /\.\.\/jfrog\/references/);
+});
+
+test('rewriteRefPointers redirects cross-skill SKILL.md pointers (with or without an anchor)', () => {
+  const out = rewriteRefPointers(
+    'read [`../jfrog/SKILL.md`](../jfrog/SKILL.md) first',
+    'jfrog-mcp-management'
+  );
+  assert.match(out, /`#jfrog` steering/);
+  assert.doesNotMatch(out, /SKILL\.md/);
+  const anchored = rewriteRefPointers(
+    'see the [server selection rules](../jfrog/SKILL.md#server-selection-rules-mandatory)',
+    'jfrog-mcp-management'
+  );
+  assert.match(anchored, /`#jfrog` steering/);
+  assert.doesNotMatch(anchored, /SKILL\.md/);
+});
+
 test('assertNoDeadRefPointers throws on a residual references/<x>.md and passes clean text', () => {
   assert.throws(
     () => assertNoDeadRefPointers('jfrog.md', 'stray `references/xray-entities.md` link'),
@@ -181,6 +219,14 @@ test('rewriteScriptPointers redirects <skill_path>/scripts and bare scripts/ to 
     rewriteScriptPointers('run scripts/jfrog-login-save-credentials.sh', 'jfrog-ai-catalog-skills'),
     /~\/\.kiro\/jfrog-scripts\/jfrog-ai-catalog-skills\/jfrog-login-save-credentials\.sh/
   );
+});
+
+test('rewriteScriptPointers redirects a cross-skill scripts/<file> to the OTHER skill\'s install path', () => {
+  const out = rewriteScriptPointers(
+    'mirrors `../../jfrog/scripts/check-environment.sh` detect_harness()',
+    'jfrog-mcp-management'
+  );
+  assert.equal(out, 'mirrors `~/.kiro/jfrog-scripts/jfrog/check-environment.sh` detect_harness()');
 });
 
 // install-scripts must land ONLY the scripts/ contents (no SKILL.md, no references) into <dest>/<skill>/.
