@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "JFrog for Kiro — IDE Power (POWER.md + steering) and kiro-cli (skills) built from the vendored JFrog Agent Skills (Phase 1: knowledge only, no MCP).",
+  "description": "JFrog for Kiro — IDE Power (POWER.md + mcp.json + steering) and kiro-cli (skills) built from the vendored JFrog Agent Skills (Phase 1: knowledge only).",
   "license": "Apache-2.0",
   "scripts": {
     "sync-skills": "node scripts/sync-skills.mjs",
