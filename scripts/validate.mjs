@@ -69,6 +69,25 @@ export function validatePower(md) {
   return errors;
 }
 
+// mcp.json ships with the power (see README/POWER.md); it must stay valid JSON with the JFrog MCP
+// server's url wired to the ${JFROG_PLATFORM_URL} env-var placeholder, not a raw/mistyped value. This
+// was deleted once already in this repo's history — catch that regression (or a broken url) at build time.
+export function validateMcpJson(text) {
+  if (text == null) return ['mcp.json: file is missing'];
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    return [`mcp.json: invalid JSON (${e.message})`];
+  }
+  const url = json?.mcpServers?.jfrog?.url;
+  if (typeof url !== 'string' || !url) return ['mcp.json: missing mcpServers.jfrog.url'];
+  if (!/^https:\/\/\$\{[A-Z0-9_]+\}\/mcp$/.test(url)) {
+    return [`mcp.json: mcpServers.jfrog.url "${url}" must look like https://\${ENV_VAR}/mcp`];
+  }
+  return [];
+}
+
 function main() {
   const root = process.cwd();
   const errors = [];
@@ -81,6 +100,9 @@ function main() {
   for (const d of dirs) errors.push(...validateSkillDir(skillsRoot, d));
 
   errors.push(...validatePower(readFileSync(join(root, 'POWER.md'), 'utf8')));
+
+  const mcpPath = join(root, 'mcp.json');
+  errors.push(...validateMcpJson(existsSync(mcpPath) ? readFileSync(mcpPath, 'utf8') : null));
 
   const steeringRoot = join(root, 'steering');
   const steeringFiles = existsSync(steeringRoot)

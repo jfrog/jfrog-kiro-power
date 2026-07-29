@@ -12,6 +12,7 @@ import {
   validateSkillDir,
   validatePower,
   validateSteeringFile,
+  validateMcpJson,
 } from './validate.mjs';
 import { installAdditive } from './install-cli.mjs';
 import { installScripts } from './install-scripts.mjs';
@@ -89,6 +90,23 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
   assert.ok(validateSteeringFile('x.md', 'no frontmatter').some((e) => e.includes('frontmatter')));
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: bogus\ndescription: d\n---').some((e) => e.includes('inclusion')));
   assert.ok(validateSteeringFile('x.md', '---\ninclusion: auto\n---').some((e) => e.includes('description')));
+});
+
+// mcp.json ships with the power; it must stay valid JSON with the jfrog server's url wired to the
+// ${JFROG_PLATFORM_URL} env-var placeholder (this file was deleted once already in this repo's history).
+test('validateMcpJson requires valid JSON and a properly-wired mcpServers.jfrog.url', () => {
+  assert.deepEqual(
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp"}}}'),
+    []
+  );
+  assert.ok(validateMcpJson(null).some((e) => e.includes('missing')));
+  assert.ok(validateMcpJson('{ not json').some((e) => e.includes('invalid JSON')));
+  assert.ok(validateMcpJson('{"mcpServers":{}}').some((e) => e.includes('mcpServers.jfrog.url')));
+  assert.ok(
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://YOUR_JFROG_PLATFORM_URL/mcp"}}}').some((e) =>
+      e.includes('must look like')
+    )
+  );
 });
 
 // The CLI installer's additive copy is the primary path: it must land the vendored skills/ into
