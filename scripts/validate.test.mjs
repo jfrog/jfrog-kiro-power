@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -23,7 +24,7 @@ import {
   collapseSelfReferentialLinks,
 } from './gen-steering.mjs';
 import { syncPin } from './sync-pin.mjs';
-import { extractTarToDir } from './lib/targz.mjs';
+import { extractTarToDir, fetchTarGz } from './lib/targz.mjs';
 
 function writeSkill(root, dir, body) {
   mkdirSync(join(root, dir), { recursive: true });
@@ -342,6 +343,13 @@ test('rewriteScriptPointers leaves an unrelated embedded scripts/<file> path unt
   assert.equal(rewriteScriptPointers(text, 'jfrog-setup-package-managers'), text);
 });
 
+// Same case as above, but with a hyphen immediately before `scripts/` instead of a slash (e.g. a
+// `build-scripts/` directory some other tool uses) — a narrower gap in the same guard.
+test('rewriteScriptPointers leaves a hyphen-adjacent unrelated scripts/<file> path untouched', () => {
+  const text = 'see `build-scripts/print-policy.mjs` for details';
+  assert.equal(rewriteScriptPointers(text, 'jfrog-setup-package-managers'), text);
+});
+
 test('rewriteScriptPointers redirects a cross-skill scripts/<file> to the OTHER skill\'s install path', () => {
   const out = rewriteScriptPointers(
     'mirrors `../../jfrog/scripts/check-environment.sh` detect_harness()',
@@ -459,4 +467,56 @@ test('extractTarToDir skips symlink entries instead of following or recreating t
 
   assert.ok(!existsSync(join(destDir, 'evil-link')), 'symlink entry is not materialized on disk');
   assert.equal(readFileSync(join(destDir, 'real-file.txt'), 'utf8'), 'ok', 'subsequent regular entry still lands');
+});
+
+// fetchTarGz runs unconditionally on every CI push/PR and release tag (the vendoring drift check), with
+// no path filter — so a transient network blip must not fail an unrelated PR or block a release outright.
+// Mock global fetch rather than hitting the real network; retryDelayMs: 0 keeps these tests instant.
+function withMockFetch(impl, fn) {
+  const real = globalThis.fetch;
+  globalThis.fetch = impl;
+  return fn().finally(() => {
+    globalThis.fetch = real;
+  });
+}
+
+test('fetchTarGz retries a transient network error and succeeds once the fetch recovers', async () => {
+  let calls = 0;
+  await withMockFetch(async () => {
+    calls++;
+    if (calls < 3) throw new Error('ECONNRESET');
+    return { ok: true, status: 200, arrayBuffer: async () => gzipSync(Buffer.from('tar-bytes')) };
+  }, async () => {
+    const { tar } = await fetchTarGz('jfrog/jfrog-skills', 'v1.0.0', { retryDelayMs: 0 });
+    assert.equal(tar.toString(), 'tar-bytes');
+    assert.equal(calls, 3, 'failed twice, succeeded on the third attempt');
+  });
+});
+
+test('fetchTarGz retries a 500 response, then gives up after exhausting retries', async () => {
+  let calls = 0;
+  await withMockFetch(async () => {
+    calls++;
+    return { ok: false, status: 500 };
+  }, async () => {
+    await assert.rejects(
+      () => fetchTarGz('jfrog/jfrog-skills', 'v1.0.0', { retries: 2, retryDelayMs: 0 }),
+      /HTTP 500/
+    );
+    assert.equal(calls, 3, 'the initial attempt plus 2 retries, then it gives up');
+  });
+});
+
+test('fetchTarGz fails immediately on a 404 instead of retrying a config error', async () => {
+  let calls = 0;
+  await withMockFetch(async () => {
+    calls++;
+    return { ok: false, status: 404 };
+  }, async () => {
+    await assert.rejects(
+      () => fetchTarGz('jfrog/does-not-exist', 'v1.0.0', { retries: 3, retryDelayMs: 0 }),
+      /HTTP 404/
+    );
+    assert.equal(calls, 1, 'a 404 means the repo/ref is wrong, so it does not retry');
+  });
 });

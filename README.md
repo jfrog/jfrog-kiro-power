@@ -209,10 +209,12 @@ read by the IDE too**. So a **global** CLI install alongside the IDE power makes
 
 A single-surface setup (only the IDE power, or only the CLI) has no duplication.
 
-**Uninstall:** `rm -rf ~/.kiro/skills/jfrog*` (every JFrog skill dir is `jfrog*`-prefixed, so this leaves
-any of your own files untouched).
+**Uninstall:** `rm -rf ~/.kiro/skills/jfrog*` — or `rm -rf "$KIRO_HOME/skills/jfrog*"` if you installed
+with a custom `KIRO_HOME` — every JFrog skill dir is `jfrog*`-prefixed, so this leaves any of your own
+files untouched.
 
-> Phase 1 = skills only (no MCP), matching the IDE power.
+> Phase 1 = skills only for kiro-cli — no MCP client. The IDE Power doesn't rely on MCP yet either,
+> though it bundles `mcp.json` pre-wired for when that server is available (see the Phase 1 note above).
 
 ## Development
 

@@ -20,16 +20,41 @@ function readStr(buf, start, len) {
   return buf.toString('utf8', start, end);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Download a GitHub tarball (repo@ref) and return the gunzipped tar bytes as a Buffer.
- * Public codeload endpoint — no auth. Throws on a non-2xx response.
+ * Public codeload endpoint — no auth.
+ *
+ * This is the one network call the vendoring pipeline makes, and it runs unconditionally on every
+ * CI push/PR and every release tag (see .github/workflows/ci.yml and release.yml) — so a single
+ * transient network blip would otherwise fail an unrelated PR or block a release with zero code
+ * involved. Retries with backoff on network errors and non-4xx-client-error responses (5xx, 429,
+ * etc.); a 404 means the repo/ref genuinely doesn't exist, so it fails immediately instead of
+ * retrying a config error `retries + 1` times for no benefit.
  */
-export async function fetchTarGz(repo, ref) {
+export async function fetchTarGz(repo, ref, { retries = 3, retryDelayMs = 500 } = {}) {
   const url = `https://codeload.github.com/${repo}/tar.gz/${encodeURIComponent(ref)}`;
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) throw new Error(`could not download ${repo}@${ref} (HTTP ${res.status})`);
-  const gz = Buffer.from(await res.arrayBuffer());
-  return { url, tar: gunzipSync(gz) };
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(url, { redirect: 'follow' });
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await sleep(retryDelayMs * 2 ** attempt);
+      continue;
+    }
+    if (res.ok) {
+      const gz = Buffer.from(await res.arrayBuffer());
+      return { url, tar: gunzipSync(gz) };
+    }
+    if (res.status === 404 || attempt >= retries) {
+      throw new Error(`could not download ${repo}@${ref} (HTTP ${res.status})`);
+    }
+    await sleep(retryDelayMs * 2 ** attempt);
+  }
 }
 
 /**
