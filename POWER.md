@@ -1,6 +1,6 @@
 ---
 name: "jfrog"
-displayName: "JFrog Platform"
+displayName: "JFrog"
 description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects, run security scans, and query package safety. Ships the official JFrog knowledge as steering and drives the platform through the JFrog CLI (jf) and jf api."
 keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management", "curation", "skills"]
 author: "JFrog"
