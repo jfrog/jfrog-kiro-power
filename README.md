@@ -10,11 +10,11 @@ vendored JFrog [Agent Skills](https://kiro.dev/docs/skills/):
 Both enable AI-assisted JFrog Platform workflows — searching artifacts, managing repositories, handling
 users/groups, setting up projects, checking package safety, and querying security metadata.
 
-> **Phase 1 — skills only.** Both surfaces ship the JFrog skill knowledge and drive the platform through
-> the `jf` CLI. The JFrog remote **MCP server** and **Agent Guard** arrive in later phases. The IDE Power
-> still bundles `mcp.json`, pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL`
-> environment variable to your platform hostname so it resolves once the MCP server is available; no
-> manual edit of `mcp.json` is needed.
+> **Phase 1 — skills first, MCP supported.** Both surfaces ship the JFrog skill knowledge and drive the
+> platform through the `jf` CLI. The IDE Power also supports the JFrog remote **MCP server**: `mcp.json`
+> ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL` environment
+> variable to your platform hostname and it's used automatically once connected, no manual edit needed.
+> **Agent Guard** (installing/managing other MCP servers) arrives in a later phase.
 
 ## How skills are delivered on Kiro
 
@@ -213,8 +213,8 @@ A single-surface setup (only the IDE power, or only the CLI) has no duplication.
 with a custom `KIRO_HOME` — every JFrog skill dir is `jfrog*`-prefixed, so this leaves any of your own
 files untouched.
 
-> Phase 1 = skills only for kiro-cli — no MCP client. The IDE Power doesn't rely on MCP yet either,
-> though it bundles `mcp.json` pre-wired for when that server is available (see the Phase 1 note above).
+> Phase 1 = skills only for kiro-cli — it has no MCP client mechanism at all (unlike the IDE Power,
+> which does support the JFrog remote MCP server — see the Phase 1 note above).
 
 ## Development
 
@@ -263,7 +263,10 @@ activation works reliably. See [Troubleshooting Installation](POWER.md#troublesh
 
 Contributions are welcome! See [CONTRIBUTING](CONTRIBUTING.md).
 
-## License and Support
+## License and support
+
+This power integrates with the JFrog MCP server (Proprietary — part of the JFrog Platform).
 
 - Licensed under the [Apache License 2.0](LICENSE).
-- Get support by opening an issue in this repository or reaching out to support@jfrog.com.
+- [Privacy Policy](https://jfrog.com/privacy-notice/)
+- [Support](https://jfrog.com/support/)

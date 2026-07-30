@@ -15,8 +15,8 @@ SDLC.
 This power delivers the official **JFrog Agent Skills knowledge as bundled steering files** — generated
 from the pinned [`jfrog/jfrog-skills`](https://github.com/jfrog/jfrog-skills) and shipped **inside the
 power**, so JFrog capabilities are available to Kiro immediately, with **no runtime download**. JFrog
-work is driven through the **`jf` CLI** and **`jf api`**; the JFrog remote **MCP server** is added in a
-later phase.
+work is driven through the **`jf` CLI** and **`jf api`**, and through the JFrog remote **MCP server**
+when connected — see [Tool Selection Strategy](#tool-selection-strategy) for how they're prioritized.
 
 All JFrog HTTP traffic goes through the `jf` CLI — no standalone `curl` is required or used for any JFrog
 interaction.
@@ -160,23 +160,25 @@ GitHub) rather than a local folder — Kiro copies the assets into `installed/` 
 
 ## Tool Selection Strategy
 
-Drive JFrog operations through the `jf` CLI, in this order:
+Drive JFrog operations in this order:
 
-1. **`jf` CLI subcommands** — dedicated commands such as `jf rt upload`, `jf rt download`,
+1. **JFrog MCP tools** (preferred, when connected) — discover available tools from the connected
+   server's tool list; never guess tool names. See the MCP note below for how the connection resolves.
+2. **`jf` CLI subcommands** — dedicated commands such as `jf rt upload`, `jf rt download`,
    `jf rt build-publish`.
-2. **`jf api`** — REST API calls with no dedicated subcommand; requires CLI v2.100.0+.
+3. **`jf api`** — REST API calls with no dedicated subcommand; requires CLI v2.100.0+.
 
 Never use `curl` for JFrog API calls — the CLI handles auth automatically from `jf config`, avoids
-exposing tokens in shell commands, and is the only supported fallback.
+exposing tokens in shell commands, and is the only supported fallback for tiers 2–3.
 
 For the full `jf api` reference (product prefixes, safe response patterns, methods/headers/body), AQL
 syntax, platform conventions, system repositories, and per-domain gotchas, load the `#jfrog-references`
 steering file.
 
-> If the JFrog MCP server is available in your Kiro environment, the `jfrog` steering will prefer MCP
-> tools when present. This power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` —
-> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves; beyond
-> that, connecting/configuring the MCP server itself is out of scope for this phase of the power.
+> **JFrog MCP server.** This power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` —
+> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves. Once
+> connected, the `jfrog` steering prefers MCP tools over CLI subcommands/`jf api` for the operations they
+> cover.
 
 ## Server Selection Rules
 
@@ -260,7 +262,10 @@ jf config use <server-id>
 
 Credentials are encrypted at rest by `jf config`. Never store tokens in files or environment profiles.
 
-## License and Support
+## License and support
 
-- This project is licensed under the [Apache License 2.0](LICENSE).
-- Get support by opening an issue in this repository or reaching out to support@jfrog.com.
+This power integrates with the JFrog MCP server (Proprietary — part of the JFrog Platform).
+
+- Licensed under the [Apache License 2.0](LICENSE).
+- [Privacy Policy](https://jfrog.com/privacy-notice/)
+- [Support](https://jfrog.com/support/)
