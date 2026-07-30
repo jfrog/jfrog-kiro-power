@@ -1,356 +1,271 @@
 ---
 name: "jfrog"
-displayName: "JFrog Platform"
-description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects. Uses the JFrog MCP server when connected, JFrog CLI subcommands for artifact and build operations, and jf api as the REST fallback."
-keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management"]
+displayName: "JFrog"
+description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects, run security scans, and query package safety. Ships the official JFrog knowledge as steering and drives the platform through the JFrog CLI (jf) and jf api."
+keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management", "curation", "skills"]
 author: "JFrog"
 ---
 
 # JFrog Platform
 
-> ⚠️ **Setup required before first use**
->
-> Edit `mcp.json` and replace `YOUR_JFROG_PLATFORM_URL` with your JFrog Platform hostname (e.g. `mycompany.jfrog.io`).
-> See the [MCP Config Placeholders](#mcp-config-placeholders) section below for details.
+The JFrog Platform is the universal binary management and DevSecOps solution used by developers, DevOps
+engineers, platform administrators, and security engineers to manage software artifacts across the entire
+SDLC.
 
-## Overview
+This power delivers the official **JFrog Agent Skills knowledge as bundled steering files** — generated
+from the pinned [`jfrog/jfrog-skills`](https://github.com/jfrog/jfrog-skills) and shipped **inside the
+power**, so JFrog capabilities are available to Kiro immediately, with **no runtime download**. JFrog
+work is driven through the **`jf` CLI** and **`jf api`**, and through the JFrog remote **MCP server**
+when connected — see [Tool Selection Strategy](#tool-selection-strategy) for how they're prioritized.
 
-The JFrog Platform is the universal binary management and DevSecOps solution used by developers, DevOps engineers, platform administrators, and security engineers to manage software artifacts across the entire SDLC.
+All JFrog HTTP traffic goes through the `jf` CLI — no standalone `curl` is required or used for any JFrog
+interaction.
 
-This power enables AI-assisted workflows on the JFrog Platform — searching artifacts, managing repositories, handling users and groups, setting up projects, and querying security metadata. It uses a **three-tier tool strategy**: the **JFrog MCP server** when connected, **`jf` CLI subcommands** for operations with dedicated commands, and **`jf api`** (v2.100.0+) as the REST fallback.
+## JFrog knowledge (steering)
 
-All JFrog HTTP traffic from Tiers 2 and 3 goes through the `jf` CLI — no standalone `curl` is required or used for any JFrog interaction.
+A Kiro Power ships `POWER.md` + `steering/` (it cannot bundle a `skills/` directory), so the JFrog skills
+are delivered here as steering files that ship with the power and load automatically:
 
-Current scope: **Artifactory** (users, groups, projects, repositories, artifacts). Xray security metadata is included where available on artifacts.
+| Steering file | Inclusion | Covers |
+|---------------|-----------|--------|
+| `jfrog` | auto | Foundational JFrog skill — CLI setup/auth, tool strategy, Artifactory/Xray/projects/builds/permissions, security audits, platform administration. |
+| `jfrog-references` | manual (`#jfrog-references`) | Deep reference material — `jf api` paths, AQL syntax, OneModel GraphQL, entity models, per-domain gotchas. |
+| `jfrog-package-safety-and-download` | auto | Check whether a package version is safe/curated and download it through Artifactory. |
+| `jfrog-ai-catalog-skills` | auto | Discover, install, manage, and publish agent skills in the JFrog AI Catalog via `jf skills`. |
+| `jfrog-ai-catalog-skills-references` | manual (`#jfrog-ai-catalog-skills-references`) | Deep reference material for the AI-Catalog workflow. |
+| `jfrog-mcp-management` | auto | Install, list, and remove MCP servers/tools via the JFrog Agent Guard, and browse the JFrog MCP catalog. |
+| `jfrog-mcp-management-references` | manual (`#jfrog-mcp-management-references`) | Deep reference material for Agent Guard activation and per-harness (Claude/Cursor/VS Code) setup. |
+| `jfrog-reference-architecture` | auto | JFrog Platform topology, sizing, deployment patterns, HA, air-gapped, and disaster-recovery guidance. |
+| `jfrog-reference-architecture-references` | manual (`#jfrog-reference-architecture-references`) | Deep reference material for platform architecture. |
+| `jfrog-setup-package-managers` | auto | Set up, configure, or bind a package manager (npm, pip, maven, gradle, go, docker, helm, …) to Artifactory via `jf setup`. |
+| `jfrog-setup-package-managers-references` | manual (`#jfrog-setup-package-managers-references`) | Deep reference material for package-manager setup. |
 
-## Available Steering Files
+The `auto` files activate when your request matches their description. When you need deep detail (exact
+API paths, AQL, schemas), pull the matching `-references` file (e.g. `#jfrog-references`,
+`#jfrog-ai-catalog-skills-references`).
 
-- **artifactory-search** — Searching artifacts, users, groups, and projects (AQL, REST API patterns)
-- **artifactory-artifacts** — Uploading, downloading, and querying artifact metadata including Xray scan results
-- **artifactory-admin** — Creating projects, repositories, users, groups, and managing memberships
+> **Scope of the Power.** A Kiro Power itself carries **knowledge only** — `POWER.md` + `mcp.json` +
+> `steering/*.md`, no executables — so the steering above (plus the `#jfrog-references` bundles) is
+> available immediately, and reference material is reachable in the Power (via `#jfrog-references`, not
+> on-disk `references/*.md` files). The skill's **helper scripts** (login/environment-check) cannot ride
+> inside a power; instead [Onboarding](#onboarding) step 2 fetches **just those scripts** on demand into
+> `~/.kiro/jfrog-scripts/` (no skill is registered, so nothing duplicates the steering). If that fetch is
+> declined or offline, the Power still works on steering knowledge alone and retries when a script is next
+> needed.
+
+## Onboarding
+
+Kiro runs this section automatically the first time the power is used.
+
+1. **Nothing is required to get started.** The JFrog steering above ships with the power and loads
+   automatically — no download, no copy step. Confirm prerequisites — `jf` CLI ≥ **2.100.0** and at
+   least one configured server:
+
+   ```bash
+   jf --version        # need >= 2.100.0
+   jf config show      # need at least one "Server ID"
+   ```
+
+   From a checkout of this repo you can run the bundled check instead:
+   `bash scripts/verify-install.sh` (macOS/Linux) or
+   `pwsh scripts/verify-install.ps1` (Windows). If the CLI is missing or too old, see
+   [JFrog CLI Setup](#jfrog-cli-setup).
+
+2. **(On demand) Install the JFrog helper scripts.** The steering already provides the full JFrog
+   knowledge — the only thing not bundled is the skills' runnable helper **scripts**
+   (login/environment-check). When a request needs one and it is not yet on disk, install **just the
+   scripts** (no `SKILL.md`, so no skill is registered and nothing duplicates the steering). They come
+   from the **same pinned version** (`v0.20.0`) and land in `~/.kiro/jfrog-scripts/<skill>/`; this is the
+   **only** action that touches the network. **Confirm once with the user, then install globally.** Be
+   graceful: if the user declines or is offline, skip it — the steering still works — and simply retry the
+   next time a script is needed.
+
+   **Preferred — from a checkout of this repo (cross-platform, no external tools):**
+
+   ```bash
+   npm run install-scripts                # -> ~/.kiro/jfrog-scripts   (global)
+   npm run install-scripts -- --workspace # -> ./.kiro/jfrog-scripts   (this workspace only)
+   ```
+
+   **Without the repo — self-contained, scripts only (pick your OS):**
+
+   *macOS / Linux:*
+
+   ```bash
+   TMP="$(mktemp -d)"
+   curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.20.0 | tar -xz -C "$TMP"
+   for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
+     mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
+   rm -rf "$TMP"
+   ```
+
+   *Windows (PowerShell — `.zip` + built-in `Expand-Archive`, no `tar` needed):*
+
+   ```powershell
+   $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
+   Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.20.0 -OutFile "$tmp\s.zip"
+   Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
+   Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
+     $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null
+     Copy-Item "$($_.FullName)\*" "$HOME\.kiro\jfrog-scripts\$s\" -Recurse -Force }
+   Remove-Item $tmp -Recurse -Force
+   ```
+
+> **Maintainers only:** `scripts/sync-skills.mjs` (re-vendor the embedded skills) and
+> `scripts/gen-steering.mjs` (regenerate `steering/` from them) are build-time tools. They are **not**
+> part of onboarding and never run on a user's machine — see [VENDOR.md](VENDOR.md).
+
+## Troubleshooting Installation
+
+**This power's name is `jfrog`** (POWER.md `name:` frontmatter). Kiro registers it under that name in
+`~/.kiro/powers/registries/`. If your registry entry shows a different id (e.g. a folder name), reinstall
+so the id matches — the agent activates the power by this name.
+
+- **Agent gives generic answers / suggests `curl` instead of `jf`.** The power context isn't loaded in
+  the conversation. Fix, in order:
+  1. Ensure the JFrog power is **enabled** in the Powers panel and **fully quit and reopen Kiro** (a
+     reload is not always enough).
+  2. Click **Try Power** in the Powers panel, or reference the steering directly with `#jfrog`, to force
+     the JFrog context into the chat.
+  3. If it still won't activate after a local **folder** import, prefer a **GitHub** install (below) —
+     folder imports are referenced in place and may not populate `~/.kiro/powers/installed/<name>/`,
+     which can stop the agent from activating the power.
+- **`kiro_powers` tool fails with "Power not installed" (or the power won't activate) after a local
+  folder import.** This is **expected** for local **folder** imports: Kiro references the power in place
+  from your path and does **not** copy it into `~/.kiro/powers/installed/<name>/`, so the `kiro_powers`
+  activation tool can't find it there. Solutions, best first:
+  1. **Install from GitHub** (Powers → Add Custom Power → Import from GitHub) — Kiro copies the files into
+     `installed/jfrog/` and `kiro_powers` works. This is the recommended path for real testing.
+  2. Or **stage the installed dir** to match a GitHub install (local dev workaround):
+     ```bash
+     mkdir -p ~/.kiro/powers/installed/jfrog
+     cp POWER.md mcp.json ~/.kiro/powers/installed/jfrog/
+     rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
+     # then fully quit & reopen Kiro
+     ```
+  3. Or skip activation entirely and **load the steering manually** with `#jfrog` (see below) — enough to
+     iterate on steering content.
+- **`~/.kiro/powers/installed/` is empty after a folder import.** Expected — folder imports are
+  referenced in place from your local path (see the registry's `source.path`). A **GitHub** import copies
+  `POWER.md` + `steering/` into `~/.kiro/powers/installed/jfrog/`. Either is fine as long as the power is
+  active in the Powers panel.
+- **Steering doesn't auto-load.** Pull it manually with `#jfrog` (foundational) or `#jfrog-references`
+  (deep API/AQL detail). If you want it always on, a workspace can also copy these files into
+  `.kiro/steering/`.
+- **Prerequisites failing.** Run `bash scripts/verify-install.sh` / `pwsh scripts/verify-install.ps1`, or
+  the manual `jf --version` / `jf config show` checks above.
+
+For the smoothest first-run experience, install from **GitHub** (Powers → Add Custom Power → Import from
+GitHub) rather than a local folder — Kiro copies the assets into `installed/` and activation is reliable.
 
 ## Tool Selection Strategy
 
-Try the tiers in order; move to the next only when the current tier does not cover the operation or fails:
+Drive JFrog operations in this order:
 
-1. **JFrog MCP tools** (preferred) — use MCP tools if the server is connected and the operation is covered. Discover available tools from the connected server's tool list; never guess tool names.
-2. **`jf` CLI subcommands** (fallback) — dedicated commands such as `jf rt upload`, `jf rt download`, `jf rt build-publish`.
-3. **`jf api`** (last resort) — REST API calls with no dedicated subcommand; requires CLI v2.100.0+. Validate the path first — see rule 6 in [Cautious Execution](#cautious-execution).
+1. **JFrog MCP tools** (preferred, when connected) — discover available tools from the connected
+   server's tool list; never guess tool names. See the MCP note below for how the connection resolves.
+2. **`jf` CLI subcommands** — dedicated commands such as `jf rt upload`, `jf rt download`,
+   `jf rt build-publish`.
+3. **`jf api`** — REST API calls with no dedicated subcommand; requires CLI v2.100.0+.
 
-Never use `curl` for JFrog API calls. The CLI handles auth automatically from `jf config`, avoids exposing tokens in shell commands, and is the only supported CLI fallback.
+Never use `curl` for JFrog API calls — the CLI handles auth automatically from `jf config`, avoids
+exposing tokens in shell commands, and is the only supported fallback for tiers 2–3.
 
-MCP and the CLI may use different token scopes. If one tier returns 403, try the alternate tier before reporting the operation blocked.
+For the full `jf api` reference (product prefixes, safe response patterns, methods/headers/body), AQL
+syntax, platform conventions, system repositories, and per-domain gotchas, load the `#jfrog-references`
+steering file.
 
-When MCP is connected, always check whether a tool exists for the operation before reaching for CLI subcommands or `jf api`. The MCP server evolves continuously — new tools are added over time, so rely on the live tool list rather than any static reference.
+> **JFrog MCP server.** This power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` —
+> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves. Once
+> connected, the `jfrog` steering prefers MCP tools over CLI subcommands/`jf api` for the operations they
+> cover.
 
 ## Server Selection Rules
 
 Exactly one server must be resolved before any CLI operation. These rules are strict:
 
-**JFrog MCP and CLI use independent auth.** MCP tools authenticate through the MCP server session (not `jf config`); CLI commands authenticate through `jf config`. If you switch the CLI target server via `jf config use`, the MCP connection still points to its original server. Do not mix MCP and CLI calls targeting different servers in the same session. If the user asks to switch servers, warn that MCP tools will continue to target the original server until the MCP connection is re-established.
+1. **User named a specific server** — use that server only. Pass `--server-id <id>` to every `jf`
+   command. Do not touch any other configured server.
+2. **User did not name a server** — use the current default server only (`jf config show`). If no default
+   is set, stop and ask the user which server to use.
+3. **Verify before executing** — confirm the server exists in `jf config show` before running any command.
 
-1. **User named a specific server** — use that server only. Pass `--server-id <id>` to every `jf` command. Do not touch any other configured server.
-2. **User did not name a server** — use the current default server only. Determine it via `jf config show` (the entry marked as default). If no default is set, stop and ask the user which server to use.
-3. **Verify before executing** — confirm the server exists in `jf config show` before running any command against it.
-
-Pass `--server-id <id>` **after** the subcommand name, not after `jf` itself:
-
-- ✅ `jf api --server-id <id> /artifactory/api/system/version`
-- ✅ `jf rt ping --server-id <id>`
-- ❌ `jf --server-id <id> api /…` — fails with `flag provided but not defined`
-
-If the resolved server produces any error (auth failure, network error, not found), **stop and report the error to the user**. Do not try other configured servers, do not iterate through the server list, and do not silently switch servers.
-
-## Authentication & Prerequisites
-
-### JFrog CLI Setup
-
-**Minimum version: 2.100.0** (required for `jf api`).
-
-#### Install
-
-```bash
-# macOS
-brew install jfrog-cli
-
-# Linux
-curl -fL https://install-cli.jfrog.io | sh
-```
-
-#### Verify version
-
-```bash
-jf --version
-```
-
-Minimum required: `2.100.0`. If below this version, stop and ask the user to upgrade.
-
-#### Configure a server
-
-```bash
-# Add server (non-interactive)
-jf config add <server-id> \
-  --url=https://<your-jfrog-server-subdomain>.jfrog.io \
-  --access-token=<token> \
-  --interactive=false
-
-# Set as default
-jf config use <server-id>
-
-# Verify
-OUT=/tmp/jf-version-$$.json
-jf api /artifactory/api/system/version > "$OUT"
-echo "$OUT"
-jq '.' "$OUT"
-```
-
-Credentials are encrypted at rest by `jf config`. Never store tokens in files or environment variable profiles.
-
-### MCP Configuration
-
-The JFrog MCP server is configured in this power's `mcp.json` and connects to:
-
-```
-https://<your-jfrog-server-subdomain>.jfrog.io/mcp
-```
-
-OAuth authorization is triggered automatically by the MCP client on first use. No additional setup is required when the MCP server is connected.
-
-## MCP Config Placeholders
-
-Before using this power, replace the following placeholder in `mcp.json` with your actual value:
-
-- **`YOUR_JFROG_PLATFORM_URL`**: Your JFrog Platform subdomain hostname (e.g. `mycompany.jfrog.io`).
-  - **How to get it:**
-    1. Log in to your JFrog Platform instance
-    2. The hostname is the subdomain in your browser's address bar: `https://<subdomain>.jfrog.io`
-    3. Replace `YOUR_JFROG_PLATFORM_URL` with that subdomain, e.g. `mycompany.jfrog.io`
-
-After replacing, your `mcp.json` should look like:
-```json
-{
-  "mcpServers": {
-    "jfrog": {
-      "url": "https://mycompany.jfrog.io/mcp"
-    }
-  }
-}
-```
-
-> **Tip:** You can find and edit `mcp.json` directly in the Powers UI — click the gear icon next to the JFrog power after installation.
-
-## `jf api` Usage
-
-`jf api` is the Tier 3 entry point for JFrog Platform REST APIs when MCP and dedicated CLI subcommands are not available. It uses credentials from `jf config` — no token in the command line.
-
-### Syntax
-
-```bash
-jf api <path> [flags]
-```
-
-- `<path>` is the API path including the product prefix (e.g. `/artifactory/api/repositories`, `/access/api/v2/users`)
-- **stdout**: response body (JSON or text)
-- **stderr**: `[Info] Http Status: NNN` on every call; non-2xx also adds `[Warn] jf api: <method> <url> returned NNN`
-- **exit code**: 0 on 2xx, non-zero otherwise
-
-### Product prefix table
-
-`jf api` requires the full path including the product prefix — omitting it returns 404.
-
-| Product | Path prefix |
-|---------|-------------|
-| Artifactory | `/artifactory/api/...` |
-| Xray | `/xray/api/...` |
-| Access (users, groups, tokens, permissions, projects) | `/access/api/...` |
-| Evidence | `/evidence/api/...` |
-| Release Lifecycle | `/lifecycle/api/...` |
-| Distribution | `/distribution/api/...` |
-
-### Safe response pattern
-
-**Never pipe `jf api` directly to `jq`** — a wrong filter loses the response body. Always save to a file first, then parse:
-
-```bash
-OUT=/tmp/jf-projects-$$.json
-jf api /access/api/v1/projects > "$OUT"
-echo "$OUT"
-jq '.' "$OUT"
-```
-
-Use `$$` (the shell PID) in filenames to prevent collisions. **Always echo the expanded path** so it can be reused across shell calls — each shell invocation has a different PID, so `$$` expands to a different value each time.
-
-For error checking:
-
-```bash
-OUT=/tmp/jf-repos-$$.json
-ERR=/tmp/jf-repos-err-$$.log
-jf api /artifactory/api/repositories > "$OUT" 2> "$ERR"
-if [ $? -eq 0 ]; then
-  jq '.' "$OUT"
-else
-  echo "ERROR:"
-  cat "$ERR"
-  cat "$OUT"
-fi
-```
-
-### Methods, headers, and body
-
-```bash
-# GET (default)
-jf api /artifactory/api/repositories
-
-# POST JSON inline
-jf api /access/api/v2/groups -X POST -H "Content-Type: application/json" \
-  -d '{"name":"dev-team","description":"Dev team"}'
-
-# POST JSON from file
-jf api /access/api/v2/users -X POST -H "Content-Type: application/json" --input ./user.json
-
-# PUT
-jf api /artifactory/api/repositories/my-repo -X PUT -H "Content-Type: application/json" \
-  -d '{"key":"my-repo","rclass":"local","packageType":"npm"}'
-
-# DELETE
-jf api /artifactory/api/repositories/my-repo -X DELETE
-
-# Explicit server
-jf api /artifactory/api/system/version --server-id=<server-id>
-```
-
-## Platform Conventions
-
-- Always create and manage repositories within a JFrog Project unless the user explicitly opts out.
-- Project key format: 2–32 lowercase alphanumeric characters and hyphens, must start with a letter, no leading/trailing hyphens.
-- Use virtual repository endpoints for all client reads and writes.
-- For each package type, create and wire a remote + local + virtual set.
-- Create repositories in this order: remote → local → virtual.
-- Standard repository naming: `{project-key}-{ecosystem}-{type}` (e.g. `myproj-npm-local`, `myproj-npm-remote`, `myproj-npm`)
-
-## System Repositories
-
-Artifactory maintains several system repositories for internal platform metadata. **Exclude these from reporting, scanning, or auditing** — they contain platform metadata, not user artifacts:
-
-| Pattern | Purpose |
-|---------|---------|
-| `release-bundles` | Release Bundles V1 metadata |
-| `release-bundles-v2` | Release Bundles V2 metadata |
-| `artifactory-build-info` | Default build info storage |
-| `*-release-bundles` | Project-scoped Release Bundles V1 |
-| `*-release-bundles-v2` | Project-scoped Release Bundles V2 |
-| `*-build-info` | Project-scoped build info storage |
-| `*-application-versions` | AppTrust application version metadata |
+Pass `--server-id <id>` **after** the subcommand name (`jf api --server-id <id> /…`), not after `jf`
+itself (`jf --server-id <id> api /…` fails). If the resolved server errors (auth, network, not found),
+**stop and report** — do not try other servers or silently switch.
 
 ## Cautious Execution
 
-Do not run commands speculatively. Before executing any JFrog CLI command, MCP tool call, or API call:
+Do not run commands speculatively. Before executing any JFrog CLI command or API call:
 
-1. Confirm the operation is needed to fulfill the user's request. If the request is ambiguous or could refer to multiple systems (e.g. "builds" could mean Artifactory build-info or CI/CD pipeline runs), **ask the user for clarification** instead of guessing.
-2. Resolve the target server using the **Server selection rules** above
-3. For mutating operations (create, update, delete, upload), confirm with the user unless the intent is clearly implied. This applies to all tiers (MCP tools, CLI commands, and `jf api` with POST/PUT/DELETE).
-4. Prefer read operations first to understand current state before making changes
-5. **Never invent preparatory mutations.** If an operation fails because a precondition is not met (artifact missing, repo doesn't exist), stop and report the gap to the user. Do not perform copy, move, upload, or create-repo to satisfy the precondition unless the user explicitly asks.
-6. **Never guess tool names or API paths.** For MCP tools, confirm the tool exists in the server's tool list. For `jf api` paths, validate against the steering files or [JFrog OpenAPI specifications](https://docs.jfrog.com/integrations/docs/openapi-specifications). On a 404, stop and report — never retry with a guessed alternative path.
+1. Confirm the operation is needed. If the request is ambiguous, **ask for clarification** instead of
+   guessing.
+2. Resolve the target server using the **Server Selection Rules** above.
+3. For mutating operations (create, update, delete, upload), confirm with the user unless intent is
+   clearly implied.
+4. Prefer read operations first to understand current state.
+5. **Never invent preparatory mutations.** If a precondition is unmet, stop and report the gap.
+6. **Never guess API paths.** Validate `jf api` paths against the `#jfrog-references` steering. On a 404,
+   stop and report — do not retry a guess.
 
 ## Destructive Operations
 
-Any operation that deletes a JFrog object (project, repository, user, group, artifact) requires **explicit user confirmation** before execution. Present exactly what will be deleted and wait for approval. Do not proceed if the user declines or is ambiguous.
+Any operation that deletes a JFrog object (project, repository, user, group, artifact) requires
+**explicit user confirmation** before execution. Present exactly what will be deleted and wait for
+approval. Do not proceed if the user declines or is ambiguous.
 
-## Shell Variable Safety
+## Kiro-Specific Execution Notes
 
-**Never** use `USERNAME` as a shell variable — it is a reserved OS environment variable on macOS and Linux. Use `JFROG_USER_NAME` or `UNAME` instead.
+### Shell Variable Safety
 
-## Shell Execution — Script File Pattern
+**Never** use `USERNAME` as a shell variable — it is a reserved OS environment variable on macOS and
+Linux. Use `JFROG_USER_NAME` or `UNAME` instead.
 
-When running `jf api` or any multi-line shell logic via an AI tool's `execute_bash` (or equivalent), **always write commands to a script file and execute that file** rather than passing commands inline.
+### Shell Execution — Script File Pattern
 
-Inline commands fed to a shell via stdin can trigger terminal echo artifacts — each character is echoed back as if typed interactively, producing garbled output that is hard to parse. Running a script file avoids this entirely because the shell reads from a file descriptor, not stdin.
-
-### Pattern
+When running `jf api` or any multi-line shell logic via Kiro's `execute_bash`, **write commands to a
+script file and execute that file** rather than passing them inline — inline stdin commands can trigger
+terminal echo artifacts that garble output.
 
 ```bash
-# 1. Write the script to the workspace temp directory
+# 1. Write the script to the workspace temp directory (use fs_write)
 cat > ./temp/jf-script.sh << 'SCRIPT'
 #!/bin/bash
 OUT=/tmp/jf-result-$$.json
 jf api /artifactory/api/repositories > "$OUT" 2>/dev/null
-echo "exit: $?"
-echo "file: $OUT"
-cat "$OUT"
+echo "exit: $?"; echo "file: $OUT"; cat "$OUT"
 SCRIPT
 
-# 2. Execute it
+# 2. Execute it, then clean up
 bash ./temp/jf-script.sh
-
-# 3. Clean up
 rm ./temp/jf-script.sh
 ```
 
-Use the `fs_write` tool to create the script file under `./temp/`, then `execute_bash` to run it with `bash ./temp/script.sh`.
+> **Note:** `/tmp` is not accessible to `fs_write` in Kiro — always write scripts to `./temp/` inside the
+> workspace. The `temp/` directory is git-ignored.
 
-> **Note:** `/tmp` is not accessible to `fs_write` in Kiro — always write scripts to `./temp/` inside the workspace directory. The `temp/` directory is git-ignored.
+## JFrog CLI Setup
 
----
+**Minimum version: 2.100.0** (required for `jf api`). The `jfrog` steering drives CLI login/setup; the
+essentials:
 
-## Gotchas
+```bash
+# Install — macOS
+brew install jfrog-cli
+# Install — Linux
+curl -fL https://install-cli.jfrog.io | sh
 
-### MCP tools
+# Configure a server (non-interactive) and set as default
+jf config add <server-id> --url=https://<host>.jfrog.io --access-token=<token> --interactive=false
+jf config use <server-id>
+```
 
-- MCP tools return structured data in the tool result. Read response fields directly; do not pipe MCP output through shell commands or `jq`.
+Credentials are encrypted at rest by `jf config`. Never store tokens in files or environment profiles.
 
-### CLI and `jf api`
+## License and support
 
-- **Never pipe `jf api` directly to `jq`** — save the response to a file first (see Safe response pattern above).
-- **`jf api` requires the product prefix** in the path (`/artifactory/...`, `/xray/...`, `/access/...`). Omitting it returns 404.
-- **`jf api` stdout vs stderr** — body goes to stdout, status info goes to stderr. Never use `2>&1 | jq` — stderr corrupts the JSON.
-- **`jf api` has no `-L` (follow redirects) and no `-o` (output file)** — save bodies with shell redirection. For binary downloads through the Artifactory remote proxy, prefer `jf rt download`, which handles cache and redirect semantics natively.
-- **`$$` in filenames** — each shell invocation has a different PID. Always echo the expanded path so it can be reused in subsequent calls.
-- **Remote repo `-cache` suffix** — remote repo artifacts are stored in `<repo-key>-cache`. AQL queries and property operations must target the cache repo, not the remote repo key. Conversely, `/api/repositories/<key>` only accepts the parent remote key (without `-cache`) — strip the suffix for configuration lookups.
-- **Do not use `jf rt search`** — it generates unscoped AQL internally and can time out on large instances. Always use a direct AQL query via `jf api /artifactory/api/search/aql`.
-- **Unscoped build listing can time out** — never call `GET /artifactory/api/build` without `?project=` or `?buildRepo=` on large instances. See the build info section in `artifactory-artifacts.md`.
-- **`--quiet` is not a global flag** — commands that do not support it (e.g. `jf rt s`, `jf rt ping`) fail with misleading errors. Check `--help` before adding `--quiet`.
-- **Never use interactive CLI commands** — all JFrog CLI operations must be non-interactive. Avoid `jf config add` (without `--interactive=false`), `jf login`, and template wizards; use JSON configs or REST API instead.
-- **401 on `jf api`** — the configured token may have expired. Ask the user to re-run `jf config add` with a new token for the same server. Do not try a different server.
-- **403 on `jf api`** — the token lacks required permissions. If the response body is HTML, it may be rate limiting — add `sleep 1` between calls. If MCP is connected, try the alternate tier before reporting the operation blocked.
-- **409 Conflict** — resource already exists. Safe to treat as success for idempotent create operations.
-- **Xray `/summary/artifact` path format** — the path-based form of this API silently returns empty results when artifact paths contain a leading `./` (as returned by AQL when files are at the repo root). Always use the **checksum-based** form instead: fetch the SHA256 from the Storage API (`/artifactory/api/storage/<repo>/<file>`) and pass `{"checksums": ["<sha256>"]}` to `/xray/api/v1/summary/artifact`.
+This power integrates with the [JFrog MCP server](https://github.com/jfrog/jfrog-mcp-server) (open source).
 
-## Troubleshooting
-
-### JFrog CLI Not Found or Too Old
-- Install: `brew install jfrog-cli` (macOS) or `curl -fL https://install-cli.jfrog.io | sh` (Linux)
-- Minimum version 2.100.0 is required for `jf api`
-- Run `jf --version` to confirm
-
-### MCP Server Not Responding
-- Verify the MCP URL is correct: `https://<your-jfrog-server-subdomain>.jfrog.io/mcp`
-- Ensure the JFrog Platform Admin has enabled the MCP server
-- Complete OAuth authorization if prompted
-- Fall back to `jf` CLI subcommands or `jf api` if MCP remains unavailable
-
-### Authentication Failures
-- Ensure the token is a Platform Admin token
-- Check token expiry
-- Re-run `jf config add` with a new token: `jf config add <server-id> --url=https://<host> --access-token=<token> --interactive=false`
-- Generate a new token from: `https://<your-jfrog-server-subdomain>.jfrog.io/ui/admin/configuration/security/access_tokens`
-
-### `jf api` Returns Empty or Unexpected Output
-- Check that the product prefix is correct in the path
-- Verify the server is reachable: `jf api /artifactory/api/system/ping`
-- Check `jf config show` to confirm the correct server is active
-
-## Official Documentation
-
-- [Install JFrog CLI](https://docs.jfrog.com/integrations/docs/download-and-install-the-jfrog-cli)
-- [JFrog CLI Documentation](https://docs.jfrog.com/integrations/docs/jfrog-cli)
-- [JFrog MCP Server Setup](https://docs.jfrog.com/integrations/docs/add-the-jfrog-mcp-server-to-an-mcp-client)
-- [Artifactory REST APIs](https://docs.jfrog.com/artifactory/reference)
-- [Access REST APIs](https://docs.jfrog.com/administration/reference)
-- [Xray REST APIs](https://docs.jfrog.com/security/reference)
-- [JFrog Projects](https://docs.jfrog.com/projects/docs/projects)
-
-## License and Support
-
-- This project is licensed under the [Apache License 2.0](LICENSE).
-- Get support by opening an issue in this repository or reaching out to support@jfrog.com.
+- Licensed under the [Apache License 2.0](LICENSE).
+- [Privacy Policy](https://jfrog.com/privacy-notice/)
+- [Support](https://jfrog.com/support/)
