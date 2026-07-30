@@ -14,7 +14,10 @@ users/groups, setting up projects, checking package safety, and querying securit
 > platform through the `jf` CLI. The IDE Power also supports the JFrog remote **MCP server**: `mcp.json`
 > ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL` environment
 > variable to your platform hostname and it's used automatically once connected, no manual edit needed.
-> **Agent Guard** (installing/managing other MCP servers) arrives in a later phase.
+> **Agent Guard** (installing, listing, and removing other MCP servers) is already available now via the
+> `jfrog-mcp-management` skill. **MCP governance/enforcement** — controlling which MCP servers are
+> allowed — is a later-phase item; once it ships, the steering/skill will teach the power how to work
+> with Agent Guard's enforcement mechanism.
 
 ## How skills are delivered on Kiro
 
@@ -265,7 +268,7 @@ Contributions are welcome! See [CONTRIBUTING](CONTRIBUTING.md).
 
 ## License and support
 
-This power integrates with the JFrog MCP server (Proprietary — part of the JFrog Platform).
+This power integrates with the [JFrog MCP server](https://github.com/jfrog/jfrog-mcp-server) (open source).
 
 - Licensed under the [Apache License 2.0](LICENSE).
 - [Privacy Policy](https://jfrog.com/privacy-notice/)

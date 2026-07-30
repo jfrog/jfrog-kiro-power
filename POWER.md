@@ -264,7 +264,7 @@ Credentials are encrypted at rest by `jf config`. Never store tokens in files or
 
 ## License and support
 
-This power integrates with the JFrog MCP server (Proprietary — part of the JFrog Platform).
+This power integrates with the [JFrog MCP server](https://github.com/jfrog/jfrog-mcp-server) (open source).
 
 - Licensed under the [Apache License 2.0](LICENSE).
 - [Privacy Policy](https://jfrog.com/privacy-notice/)
