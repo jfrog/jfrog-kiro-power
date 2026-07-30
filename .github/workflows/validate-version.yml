@@ -9,8 +9,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      # Check out the repository to access the VERSION file
+      # Check out the repository to access the VERSION file. fetch-depth: 0 (full history, all tags)
+      # is needed for the "was this actually bumped" check below to see every released version.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       # Verify the VERSION file contains a valid semver string
       - name: Check version format
@@ -21,3 +24,23 @@ jobs:
             exit 1
           fi
           echo "Version is valid: $VERSION"
+
+      # A valid-looking VERSION isn't enough on its own — release.yml tags and releases whatever
+      # VERSION says as-is, so a value that regresses below (or exactly repeats) an already-released
+      # tag would either ship a confusing "downgrade" or hit the tag-collision guard in release.yml
+      # later. `sort -V` orders numerically (0.9.0 < 0.10.0), not lexicographically, so this compares
+      # correctly even past single-digit versions. Skipped entirely if nothing has been released yet.
+      - name: Check version was not regressed relative to the latest release
+        run: |
+          VERSION=$(cat VERSION)
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing release tags yet — nothing to compare against."
+            exit 0
+          fi
+          LOWEST=$(printf '%s\n%s\n' "$VERSION" "$LATEST_TAG" | sort -V | head -1)
+          if [ "$VERSION" != "$LATEST_TAG" ] && [ "$LOWEST" = "$VERSION" ]; then
+            echo "::error::VERSION ($VERSION) is lower than the latest released tag (v$LATEST_TAG) — bump it forward, don't regress it"
+            exit 1
+          fi
+          echo "VERSION ($VERSION) is not behind the latest release (v$LATEST_TAG)."

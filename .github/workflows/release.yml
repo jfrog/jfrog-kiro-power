@@ -21,11 +21,14 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Parse the commit message to detect whether a release bump was requested
+      # Parse the commit message to detect whether a release bump was requested. Only the SUBJECT
+      # line (first line) is scanned, not the full message — a squash-merge commit's body often
+      # concatenates every individual commit's summary, and matching there risks an accidental
+      # release from a line that merely mentions "[patch]" in passing (e.g. describing this workflow).
       - name: Detect release tag in commit message
         id: detect
         run: |
-          MSG="${{ github.event.head_commit.message }}"
+          MSG="$(echo "${{ github.event.head_commit.message }}" | head -1)"
           if echo "$MSG" | grep -qE '\[(major|minor|patch)\]'; then
             echo "triggered=true" >> "$GITHUB_OUTPUT"
           else
@@ -37,6 +40,43 @@ jobs:
         if: steps.detect.outputs.triggered == 'true'
         id: version
         run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      # Quality gate before anything ships. There's no test suite in this repo yet, so this checks
+      # what actually exists: VERSION is valid semver, mcp.json parses as JSON, and POWER.md carries
+      # the frontmatter Kiro requires. validate-version.yml already checks the VERSION format on the
+      # PR, but this job trusts nothing about how main got here — it re-verifies for itself, since a
+      # release step that skips its own gate is one branch-protection misconfiguration away from
+      # shipping something broken.
+      - name: Validate before releasing
+        if: steps.detect.outputs.triggered == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::VERSION file contains '$VERSION', not a valid semver (e.g. 1.2.3) — refusing to release"
+            exit 1
+          fi
+          if ! python3 -c "import json; json.load(open('mcp.json'))" 2>/tmp/mcp-err; then
+            echo "::error::mcp.json is not valid JSON — refusing to release: $(cat /tmp/mcp-err)"
+            exit 1
+          fi
+          if ! grep -qE '^name:' POWER.md || ! grep -qE '^description:' POWER.md; then
+            echo "::error::POWER.md is missing required 'name'/'description' frontmatter — refusing to release"
+            exit 1
+          fi
+          echo "Sanity checks passed for v$VERSION."
+
+      # Fail with a clear, actionable message instead of letting `git tag`/`git push` error out
+      # cryptically: a commit can carry a release keyword while VERSION was left unbumped (e.g. a
+      # forgotten step, or a second [patch] commit merged before the first one's tag was cut), which
+      # would otherwise try to recreate an existing tag.
+      - name: Ensure the tag doesn't already exist
+        if: steps.detect.outputs.triggered == 'true'
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
+            echo "::error::Tag v${{ steps.version.outputs.version }} already exists. Did you forget to bump VERSION before merging with a release keyword?"
+            exit 1
+          fi
 
       # Create a version tag from the VERSION file and push it to origin
       - name: Create and push tag
