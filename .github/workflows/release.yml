@@ -1,13 +1,13 @@
-# Copyright (c) JFrog Ltd. 2026
+# (c) JFrog Ltd. (2026)
 name: Release
 
+# Releases come from main only. Merge the PR to main, then tag that main commit:
+#   git checkout main && git pull && git tag vX.Y.Z && git push origin vX.Y.Z
+# (bump package.json "version" to match first). The tag is the release users pin via
+# "Import from GitHub" in Kiro; no build artifact is required for a Kiro power.
 on:
   push:
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -16,87 +16,95 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      # Check out the repository so workflow scripts can access its contents
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0 # need history so we can check the tag is on main
 
-      # Parse the commit message to detect whether a release bump was requested. Only the SUBJECT
-      # line (first line) is scanned, not the full message — a squash-merge commit's body often
-      # concatenates every individual commit's summary, and matching there risks an accidental
-      # release from a line that merely mentions "[patch]" in passing (e.g. describing this workflow).
-      - name: Detect release tag in commit message
-        id: detect
+      # Refuse to release a tag that points at a commit not on main (e.g. a feature branch).
+      - name: Ensure the tag is on main
         run: |
-          MSG="$(echo "${{ github.event.head_commit.message }}" | head -1)"
-          if echo "$MSG" | grep -qE '\[(major|minor|patch)\]'; then
-            echo "triggered=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "triggered=false" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points at a commit that is not on main. Release only after merging to main."
+            exit 1
           fi
 
-      # Read the current version from the VERSION file
-      - name: Read version
-        if: steps.detect.outputs.triggered == 'true'
-        id: version
-        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
-
-      # Quality gate before anything ships. There's no test suite in this repo yet, so this checks
-      # what actually exists: VERSION is valid semver, mcp.json parses as JSON, and POWER.md carries
-      # the frontmatter Kiro requires. validate-version.yml already checks the VERSION format on the
-      # PR, but this job trusts nothing about how main got here — it re-verifies for itself, since a
-      # release step that skips its own gate is one branch-protection misconfiguration away from
-      # shipping something broken.
-      - name: Validate before releasing
-        if: steps.detect.outputs.triggered == 'true'
+      # The tag is pushed by a human before this workflow ever runs, so by the time any check here
+      # could fail, the tag already exists and is importable via "Import from GitHub" in Kiro —
+      # nothing about the tag *itself* is validated. Catch the two ways that goes wrong: a malformed
+      # tag name (the trigger glob `v*` accepts `v1`, `v1.2.3-rc1`, `vfoo`, not just `vX.Y.Z`), and a
+      # tag that's not actually newer than the last release (a typo'd or duplicate version number).
+      # `sort -V` orders numerically (0.9.0 < 0.10.0), not lexicographically.
+      - name: Validate the tag itself (format, and newer than the last release)
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::VERSION file contains '$VERSION', not a valid semver (e.g. 1.2.3) — refusing to release"
+          TAG="${GITHUB_REF_NAME}"
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' is not a valid vX.Y.Z semver tag — refusing to release"
             exit 1
           fi
-          if ! python3 -c "import json; json.load(open('mcp.json'))" 2>/tmp/mcp-err; then
-            echo "::error::mcp.json is not valid JSON — refusing to release: $(cat /tmp/mcp-err)"
-            exit 1
+          git fetch --tags origin
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -v "^${TAG}\$" | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            LOWEST=$(printf '%s\n%s\n' "$TAG" "$LATEST" | sort -V | head -1)
+            if [ "$LOWEST" = "$TAG" ]; then
+              echo "::error::Tag $TAG is not newer than the latest release ($LATEST) — check for a typo"
+              exit 1
+            fi
           fi
-          if ! grep -qE '^name:' POWER.md || ! grep -qE '^description:' POWER.md; then
-            echo "::error::POWER.md is missing required 'name'/'description' frontmatter — refusing to release"
-            exit 1
-          fi
-          echo "Sanity checks passed for v$VERSION."
 
-      # Fail with a clear, actionable message instead of letting `git tag`/`git push` error out
-      # cryptically: a commit can carry a release keyword while VERSION was left unbumped (e.g. a
-      # forgotten step, or a second [patch] commit merged before the first one's tag was cut), which
-      # would otherwise try to recreate an existing tag.
-      - name: Ensure the tag doesn't already exist
-        if: steps.detect.outputs.triggered == 'true'
+      # package.json is the single source of truth for the version; the tag has to agree with it.
+      # Without this, `git tag v0.2.0` on a commit whose package.json still says 0.1.0 releases
+      # happily and ships a power whose manifest disagrees with the tag users installed.
+      - name: Ensure the tag matches the package.json version
         run: |
-          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
-            echo "::error::Tag v${{ steps.version.outputs.version }} already exists. Did you forget to bump VERSION before merging with a release keyword?"
+          set -euo pipefail
+          PKG_VERSION=$(jq -er '.version' package.json)
+          if [ "${GITHUB_REF_NAME#v}" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $PKG_VERSION — bump package.json and re-tag"
             exit 1
           fi
 
-      # Create a version tag from the VERSION file and push it to origin
-      - name: Create and push tag
-        if: steps.detect.outputs.triggered == 'true'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Gate the release on the same checks as CI so a tag can never ship broken steering/skills.
+      - name: Validate before releasing
         run: |
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          npm test
+          npm run validate
 
-      # Bundle the repository contents (excluding git metadata) into a zip archive
-      - name: Package release artifact
-        if: steps.detect.outputs.triggered == 'true'
-        run: zip -r release.zip . --exclude ".git/*" --exclude ".github/*"
+      - name: Steering drift check
+        run: |
+          npm run gen-steering
+          git diff --exit-code -- steering/ \
+            || { echo "::error::steering/ is stale at this tag — regenerate and re-tag"; exit 1; }
 
-      # Publish a GitHub Release with the zip artifact and auto-generated release notes
-      - name: Create GitHub Release
-        if: steps.detect.outputs.triggered == 'true'
+      - name: Pin-sync drift check
+        run: |
+          npm run sync-pin
+          git diff --exit-code -- POWER.md README.md \
+            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this tag — regenerate and re-tag"; exit 1; }
+
+      - name: Vendoring drift check
+        run: |
+          npm run sync-skills
+          git diff --exit-code -- skills/ \
+            || { echo "::error::skills/ drifted from the pinned upstream at this tag — regenerate and re-tag"; exit 1; }
+
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes
+
+      # The tag was already pushed (and publicly importable via Kiro's "Import from GitHub") before
+      # this job even started, so a failure above doesn't stop it from existing — it just stops a
+      # GitHub Release from being created for it. Delete the tag on any failure so a broken/untested
+      # tag doesn't linger as a plausible-looking install target; re-tag after fixing the underlying
+      # issue. `if: failure()` runs regardless of which step above failed.
+      - name: Delete the tag if the release failed
+        if: failure()
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            release.zip \
-            --title "Release v${{ steps.version.outputs.version }}" \
-            --generate-notes
+          echo "::error::Release failed — deleting tag ${GITHUB_REF_NAME} so it can't be imported in this broken state. Fix the issue and re-tag."
+          git push origin ":refs/tags/${GITHUB_REF_NAME}"

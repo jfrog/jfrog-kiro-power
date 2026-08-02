@@ -28,19 +28,78 @@ Our GitHub checks will guide you through the signing process on your first pull 
    - What changed and why
    - How you tested (or why no test applies)
 
+## Testing local changes
+
+The power ships JFrog knowledge as `steering/` files, **generated from the embedded `skills/` tree**. Two
+things to know before testing.
+
+### Local folder import ≠ GitHub install
+
+Kiro adds a power in two ways, and they are not equivalent:
+
+- **Local folder import** (Powers → Add Custom Power → *Import from a folder*): Kiro references the power
+  **in place** from your path. It does **not** copy files into `~/.kiro/powers/installed/`, so the
+  `kiro_powers` activation tool fails with "Power not installed" — this is **expected** for local imports,
+  not a bug. Use this mode for **fast iteration**.
+- **GitHub install** (Import from GitHub): Kiro **copies** `POWER.md` + `steering/` into
+  `~/.kiro/powers/installed/jfrog/`, and activation works. Use this for **production-style testing**.
+
+### Iterating on steering without a full install
+
+1. Add the power via *Import from a folder* pointed at your checkout.
+2. In a Kiro chat, load the steering manually: `#jfrog` (foundational) or `#jfrog-references` (deep
+   API/AQL). This uses the exact content the power ships.
+3. Edit `steering/` (or the generators — see below), reload Kiro, and re-test with `#jfrog`.
+4. Before opening a PR, do a **GitHub install from your fork** to confirm activation works end-to-end.
+
+Optional local dev workaround to make `kiro_powers` activation work without GitHub — stage the installed
+dir to mirror a GitHub install:
+
+```bash
+mkdir -p ~/.kiro/powers/installed/jfrog
+cp POWER.md ~/.kiro/powers/installed/jfrog/
+rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
+# then fully quit & reopen Kiro
+```
+
+### Changing skills or steering
+
+- **Do not hand-edit `skills/`** — it is vendored byte-for-byte from
+  [`jfrog/jfrog-skills`](https://github.com/jfrog/jfrog-skills) at a pinned tag (parity with the other
+  JFrog agent plugins). To change skill content, bump the pin (see [VENDOR.md](./VENDOR.md)).
+- **Do not hand-edit `steering/`** — it is generated. Run `npm run gen-steering` and commit the result.
+- After any pin bump: `npm run sync-skills && npm run gen-steering`, then commit both `skills/` and
+  `steering/`.
+- Before pushing: `npm test` and `npm run validate` must pass; `npm run verify-install` checks your
+  local `jf` CLI + server prerequisites.
+
 ## Releasing
 
-To cut a release:
+The version lives in one place only: `.version` in [`package.json`](package.json). Releases are cut by
+pushing a tag, because for a Kiro power the tag *is* the install target — it is what users pin with
+"Import from GitHub".
 
-1. In your PR, bump the `VERSION` file to the new version (e.g. `0.1.1`).
-2. Merge to `main` with `[major]`, `[minor]`, or `[patch]` anywhere in the commit message.
+1. In your PR, bump `.version` in `package.json`.
+2. Merge to `main`.
+3. Tag that `main` commit and push it:
 
-The release workflow then reads `VERSION`, creates a `vX.Y.Z` git tag, and publishes a GitHub Release with a repo zip attached. No bot push to `main` — the version bump is part of the PR itself.
+   ```bash
+   git checkout main && git pull
+   git tag v0.1.1 && git push origin v0.1.1
+   ```
+
+The release workflow then refuses the tag unless it is well-formed `vX.Y.Z`, sits on `main`, is newer
+than the last release, and matches `package.json`. After that it runs the full test and validate suite
+plus the steering, pin-sync and vendoring drift checks, and publishes a GitHub Release.
+
+Because the tag is pushed before any of that runs, a tag can briefly exist while still failing its
+checks. The workflow deletes the tag if any step fails, so a broken tag doesn't linger as a
+plausible-looking install target — fix the problem and re-tag.
 
 ## Security issues
 
 If you discover a security vulnerability, please do **not** open a public issue.
-Follow [JFrog's responsible disclosure process](https://jfrog.com/trust/report-vulnerability/) (or contact your JFrog security point-of-contact).
+Follow [JFrog’s responsible disclosure process](https://jfrog.com/trust/report-vulnerability/) (or contact your JFrog security point-of-contact).
 
 ## License
 
