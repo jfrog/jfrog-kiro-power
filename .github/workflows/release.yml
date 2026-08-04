@@ -54,8 +54,6 @@ jobs:
           fi
 
       # package.json is the single source of truth for the version; the tag has to agree with it.
-      # Without this, `git tag v0.2.0` on a commit whose package.json still says 0.1.0 releases
-      # happily and ships a power whose manifest disagrees with the tag users installed.
       - name: Ensure the tag matches the package.json version
         run: |
           set -euo pipefail
