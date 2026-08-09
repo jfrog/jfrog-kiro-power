@@ -44,7 +44,9 @@ jobs:
             exit 1
           fi
           git fetch --tags origin
-          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -v "^${TAG}\$" | sort -V | tail -1)
+          # grep -v exits 1 if it filters out every line - the first release, where the only tag is
+          # the one being pushed. Absorb it so the "no previous release" check below still runs.
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | { grep -v "^${TAG}\$" || true; } | sort -V | tail -1)
           if [ -n "$LATEST" ]; then
             LOWEST=$(printf '%s\n%s\n' "$TAG" "$LATEST" | sort -V | head -1)
             if [ "$LOWEST" = "$TAG" ]; then
