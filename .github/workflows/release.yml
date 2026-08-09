@@ -53,6 +53,16 @@ jobs:
             fi
           fi
 
+      # package.json is the single source of truth for the version; the tag has to agree with it.
+      - name: Ensure the tag matches the package.json version
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(jq -er '.version' package.json)
+          if [ "${GITHUB_REF_NAME#v}" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $PKG_VERSION — bump package.json and re-tag"
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

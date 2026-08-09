@@ -73,6 +73,30 @@ rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/
 - Before pushing: `npm test` and `npm run validate` must pass; `npm run verify-install` checks your
   local `jf` CLI + server prerequisites.
 
+## Releasing
+
+The version lives in one place only: `.version` in [`package.json`](package.json). Releases are cut by
+pushing a tag, because for a Kiro power the tag *is* the install target - it is what users pin with
+"Import from GitHub".
+
+1. In your PR, bump `.version` in `package.json`.
+2. Merge to `main`.
+3. Tag that `main` commit and push it:
+
+   ```bash
+   git checkout main && git pull
+   git tag v0.1.1 && git push origin v0.1.1
+   ```
+
+The release workflow then refuses the tag unless it is well-formed `vX.Y.Z`, sits on `main`, is newer
+than the last release, and matches `package.json` - a tag that disagrees would ship a power whose
+manifest contradicts the version users installed. After that it runs the full test and validate suite
+plus the steering, pin-sync and vendoring drift checks, and publishes a GitHub Release.
+
+Because the tag is pushed before any of that runs, a tag can briefly exist while still failing its
+checks. The workflow deletes the tag if any step fails, so a broken tag doesn't linger as a
+plausible-looking install target - fix the problem and re-tag.
+
 ## Security issues
 
 If you discover a security vulnerability, please do **not** open a public issue.
