@@ -4,7 +4,7 @@ This skill records workspace repo bindings in a file the session-start hook
 reads to override org defaults from `~/.jfrog/skills-cache/package-resolution.json`.
 
 The file is the **decisions** record, not a credential store. Tokens live
-in `jf config` and in PM-native files written by `jf setup` itself.
+in `jf config` and in package-manager-native files written by `jf setup` itself.
 
 ## Location
 
@@ -24,6 +24,7 @@ different Artifactory repos.
     "npm": "<repository-key>",
     "pypi": "<repository-key>",
     "maven": "<repository-key>",
+    "gradle": "<repository-key>",
     "go": "<repository-key>",
     "docker": "<repository-key>",
     "helm": "<repository-key>",
@@ -36,13 +37,19 @@ different Artifactory repos.
 |---|---|---|
 | `repositories` | yes | Map keyed by **package type** — same keys as `servers.<serverId>.repositories` in the global resolver cache. Omit package types you do not override. |
 
-### PM name → package type (when merging after `jf setup`)
+### Package-manager name → package type (when merging after `jf setup`)
 
-| `jf setup` PM | `repositories` key |
+Aligned with Agent Package Resolution (`PACKAGE_TYPES` / eager families).
+`gradle` is its **own** Artifactory package type — never fold it under `maven`.
+
+| `jf setup` package manager | `repositories` key |
 |---|---|
-| `npm`, `yarn`, `pnpm` | `npm` |
-| `pip`, `pipenv`, `poetry`, `twine` | `pypi` |
-| `maven`, `gradle` | `maven` |
+| `npm`, `pnpm` | `npm` |
+| `yarn` | `npm` (CLI may still accept `jf setup yarn`; APR zero-touch does **not** auto-setup yarn — only bind on explicit user request) |
+| `pip`, `pipenv`, `uv`, `twine` | `pypi` |
+| `poetry` | `pypi` (CLI may accept it; APR zero-touch does **not** auto-setup poetry — bind only on explicit user request) |
+| `maven` | `maven` |
+| `gradle` | `gradle` |
 | `go` | `go` |
 | `docker`, `podman` | `docker` |
 | `helm` | `helm` |
@@ -52,8 +59,8 @@ different Artifactory repos.
 
 ### 1. Load
 
-Before setup, **read** the file (if it exists). For each PM in the
-to-bind set, map the PM to a package type and compare
+Before setup, **read** the file (if it exists). For each package manager in the
+to-bind set, map it to a package type and compare
 `repositories.<type>` against what the resolver chose in Step 2:
 
 | Case | Action |
@@ -64,26 +71,38 @@ to-bind set, map the PM to a package type and compare
 
 ### 2. Write / merge
 
-After each successful `jf setup`:
+After each successful `jf setup`, run the skill script (do **not** hand-edit
+JSON):
 
-1. Read the current file (treat ENOENT as `{ "repositories": {} }`).
-2. Set `repositories[<pkgType>] = <repoKey>` using the PM → type table above.
-3. Atomically write `{ "repositories": { ... } }` — preserve other package
-   types already in the map.
+```bash
+bash <skill_path>/scripts/merge-workspace-binding.sh \
+  --package-manager <package-manager> \
+  --repo <repoKey> \
+  [--workspace-root <workspace-root>]
+```
 
-JSON must use 2-space indent.
+The script:
+
+1. Maps `--package-manager` → package type using the table above (unknown PM → exit 1).
+2. Validates `--repo` (`^[A-Za-z0-9._-]+$`).
+3. Reads the current file (ENOENT → empty `repositories`).
+4. Sets `repositories[<pkgType>] = <repoKey>`, preserve other package types, **last write wins** for the same type.
+5. Writes `{ "repositories": { ... } }` only (drops other top-level keys), 2-space indent, atomic replace via `mktemp` + `mv`.
+6. Serializes concurrent merges with a workspace **directory** lock (`package-resolution.lock.d`; symlink-safe; reclaim when owner PID is dead on this host or the owner hostname differs; owner-less lock dirs are **not** reclaimed — `mkdir` is the mutex; reclaimers take an exclusive side-gate so a late reclaim cannot delete a newly acquired lock).
+7. On corrupt/invalid existing JSON → exit 1 and **leaves the file untouched**.
+8. Requires `jq`; if missing → exit 1.
 
 ### 3. Never write
 
 - Credentials (`accessToken`, passwords, …).
-- PM-native config paths — those are owned by `jf setup`.
+- Package-manager-native config paths — those are owned by `jf setup`.
 
 ## Integration contract
 
 | Consumer | What it reads |
 |---|---|
 | Session-start hook | `repositories` — first workspace root with this file (multi-root) |
-| This skill | Round-trip load → diff → confirm → write |
+| This skill | Round-trip load → diff → confirm → `merge-workspace-binding.sh` |
 | `opencode-jfrog-plugin` | **Not updated** — out of scope until it reads this file |
 
 Changing the `repositories` key semantics is a breaking change; coordinate
