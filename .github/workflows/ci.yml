@@ -19,6 +19,16 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Check package.json version shape
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -er '.version' package.json)
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::package.json version '$VERSION' is not X.Y.Z"
+            exit 1
+          fi
+          echo "package.json version: $VERSION"
+
       # No dependencies to install: the tooling is dependency-free Node ESM.
       - name: Unit tests
         run: npm test

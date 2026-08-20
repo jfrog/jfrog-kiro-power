@@ -1,13 +1,15 @@
 # (c) JFrog Ltd. (2026)
 name: Release
 
-# Releases come from main only. Merge the PR to main, then tag that main commit:
-#   git checkout main && git pull && git tag vX.Y.Z && git push origin vX.Y.Z
-# (bump package.json "version" to match first). The tag is the release users pin via
-# "Import from GitHub" in Kiro; no build artifact is required for a Kiro power.
+# Releases come from main only. Bump package.json "version" and merge to main.
+# The tag is created as part of the GitHub Release (users pin via "Import from GitHub" in Kiro).
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -18,93 +20,86 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # need history so we can check the tag is on main
+          fetch-depth: 0
 
-      # Refuse to release a tag that points at a commit not on main (e.g. a feature branch).
-      - name: Ensure the tag is on main
-        run: |
-          git fetch --no-tags origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::Tag ${GITHUB_REF_NAME} points at a commit that is not on main. Release only after merging to main."
-            exit 1
-          fi
-
-      # The tag is pushed by a human before this workflow ever runs, so by the time any check here
-      # could fail, the tag already exists and is importable via "Import from GitHub" in Kiro —
-      # nothing about the tag *itself* is validated. Catch the two ways that goes wrong: a malformed
-      # tag name (the trigger glob `v*` accepts `v1`, `v1.2.3-rc1`, `vfoo`, not just `vX.Y.Z`), and a
-      # tag that's not actually newer than the last release (a typo'd or duplicate version number).
-      # `sort -V` orders numerically (0.9.0 < 0.10.0), not lexicographically.
-      - name: Validate the tag itself (format, and newer than the last release)
+      # package.json is the single source of truth for the version.
+      - name: Read version from package.json
+        id: version
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Tag '$TAG' is not a valid vX.Y.Z semver tag — refusing to release"
+          VERSION=$(jq -er '.version' package.json)
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::package.json version '$VERSION' is not X.Y.Z — refusing to release"
             exit 1
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compare version against latest release tag
+        id: release_gate
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
           git fetch --tags origin
-          # grep -v exits 1 if it filters out every line - the first release, where the only tag is
-          # the one being pushed. Absorb it so the "no previous release" check below still runs.
-          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | { grep -v "^${TAG}\$" || true; } | sort -V | tail -1)
-          if [ -n "$LATEST" ]; then
-            LOWEST=$(printf '%s\n%s\n' "$TAG" "$LATEST" | sort -V | head -1)
-            if [ "$LOWEST" = "$TAG" ]; then
-              echo "::error::Tag $TAG is not newer than the latest release ($LATEST) — check for a typo"
-              exit 1
-            fi
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          if [ -z "$LATEST" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "No prior release tag — v${VERSION} will be the first release"
+            exit 0
           fi
-
-      # package.json is the single source of truth for the version; the tag has to agree with it.
-      - name: Ensure the tag matches the package.json version
-        run: |
-          set -euo pipefail
-          PKG_VERSION=$(jq -er '.version' package.json)
-          if [ "${GITHUB_REF_NAME#v}" != "$PKG_VERSION" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $PKG_VERSION — bump package.json and re-tag"
+          LATEST_VERSION="${LATEST#v}"
+          if [ "$VERSION" = "$LATEST_VERSION" ]; then
+            echo "::error::v${VERSION} was already released — bump package.json before merging"
             exit 1
           fi
+          TAG_FOR_VERSION="v${VERSION}"
+          LOWEST=$(printf '%s\n%s\n' "$TAG_FOR_VERSION" "$LATEST" | sort -V | head -1)
+          if [ "$LOWEST" = "$TAG_FOR_VERSION" ]; then
+            echo "::error::package.json version ${VERSION} is older than the latest release ${LATEST} — check for an accidental revert"
+            exit 1
+          fi
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "Version ${VERSION} is newer than ${LATEST} — proceeding with release"
 
       - uses: actions/setup-node@v4
+        if: steps.release_gate.outputs.should_release == 'true'
         with:
           node-version: "22"
 
-      # Gate the release on the same checks as CI so a tag can never ship broken steering/skills.
+      # Gate the release on the same checks as CI so a release can never ship broken steering/skills.
       - name: Validate before releasing
+        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm test
           npm run validate
 
       - name: Steering drift check
+        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run gen-steering
           git diff --exit-code -- steering/ \
-            || { echo "::error::steering/ is stale at this tag — regenerate and re-tag"; exit 1; }
+            || { echo "::error::steering/ is stale at this release — regenerate and commit"; exit 1; }
 
       - name: Pin-sync drift check
+        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run sync-pin
           git diff --exit-code -- POWER.md README.md \
-            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this tag — regenerate and re-tag"; exit 1; }
+            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this release — regenerate and commit"; exit 1; }
 
       - name: Vendoring drift check
+        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run sync-skills
           git diff --exit-code -- skills/ \
-            || { echo "::error::skills/ drifted from the pinned upstream at this tag — regenerate and re-tag"; exit 1; }
+            || { echo "::error::skills/ drifted from the pinned upstream at this release — regenerate and commit"; exit 1; }
 
+      # --target creates the tag as part of the release, so a failure can't leave an orphan tag.
       - name: Create GitHub release
+        if: steps.release_gate.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --generate-notes
-
-      # The tag was already pushed (and publicly importable via Kiro's "Import from GitHub") before
-      # this job even started, so a failure above doesn't stop it from existing — it just stops a
-      # GitHub Release from being created for it. Delete the tag on any failure so a broken/untested
-      # tag doesn't linger as a plausible-looking install target; re-tag after fixing the underlying
-      # issue. `if: failure()` runs regardless of which step above failed.
-      - name: Delete the tag if the release failed
-        if: failure()
         run: |
-          echo "::error::Release failed — deleting tag ${GITHUB_REF_NAME} so it can't be imported in this broken state. Fix the issue and re-tag."
-          git push origin ":refs/tags/${GITHUB_REF_NAME}"
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --target "$GITHUB_SHA" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes

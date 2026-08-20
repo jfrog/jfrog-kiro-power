@@ -75,27 +75,17 @@ rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/
 
 ## Releasing
 
-The version lives in one place only: `.version` in [`package.json`](package.json). Releases are cut by
-pushing a tag, because for a Kiro power the tag *is* the install target - it is what users pin with
-"Import from GitHub".
+The version lives in one place only: `.version` in [`package.json`](package.json). For a Kiro power
+the release tag is what users pin with "Import from GitHub".
 
 1. In your PR, bump `.version` in `package.json`.
-2. Merge to `main`.
-3. Tag that `main` commit and push it:
+2. Merge to `main`. Every push to `main` compares the version against the latest release tag: if
+   the version is newer, a release proceeds; if it matches the latest tag, the workflow fails with
+   a clear "already released" error; if it is older, it fails with a revert warning.
 
-   ```bash
-   git checkout main && git pull
-   git tag v0.1.1 && git push origin v0.1.1
-   ```
-
-The release workflow then refuses the tag unless it is well-formed `vX.Y.Z`, sits on `main`, is newer
-than the last release, and matches `package.json` - a tag that disagrees would ship a power whose
-manifest contradicts the version users installed. After that it runs the full test and validate suite
-plus the steering, pin-sync and vendoring drift checks, and publishes a GitHub Release.
-
-Because the tag is pushed before any of that runs, a tag can briefly exist while still failing its
-checks. The workflow deletes the tag if any step fails, so a broken tag doesn't linger as a
-plausible-looking install target - fix the problem and re-tag.
+The release workflow runs the full test and validate suite plus the steering, pin-sync and
+vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
+`gh release create --target`).
 
 ## Security issues
 
