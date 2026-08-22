@@ -73,8 +73,8 @@ export function validatePower(md) {
 // server's url wired to the ${JFROG_PLATFORM_URL} env-var placeholder, not a raw/mistyped value. This
 // was deleted once already in this repo's history — catch that regression (or a broken url) at build time.
 //
-// The jfrog entry connects via OAuth (Kiro's dynamic-client-registration flow, triggered by an explicit
-// `oauth` object and the absence of `headers`) rather than a static bearer token. Fail the build if either
+// The jfrog entry connects via OAuth (Kiro's dynamic-client-registration flow, triggered by the absence
+// of both `headers` and `oauth: false`) rather than a static bearer token. Fail the build if either
 // a `headers`/Authorization block or `oauth: false` reappears — that would silently regress the connection
 // back to token auth, and nothing else would catch it (see mcp.json history).
 export function validateMcpJson(text) {

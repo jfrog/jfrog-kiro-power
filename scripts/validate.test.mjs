@@ -104,7 +104,7 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
 // ${JFROG_PLATFORM_URL} env-var placeholder (this file was deleted once already in this repo's history).
 test('validateMcpJson requires valid JSON and a properly-wired mcpServers.jfrog.url', () => {
   assert.deepEqual(
-    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","oauth":{}}}}'),
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp"}}}'),
     []
   );
   assert.ok(validateMcpJson(null).some((e) => e.includes('missing')));

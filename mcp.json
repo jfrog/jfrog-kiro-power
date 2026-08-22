@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "jfrog": {
-      "url": "https://${JFROG_PLATFORM_URL}/mcp",
-      "oauth": {}
+      "url": "https://${JFROG_PLATFORM_URL}/mcp"
     }
   }
 }
