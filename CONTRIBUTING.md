@@ -75,17 +75,27 @@ rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/
 
 ## Releasing
 
-The version lives in one place only: `.version` in [`package.json`](package.json). For a Kiro power
-the release tag is what users pin with "Import from GitHub".
+Every merge to `main` releases, so **every** PR to `main` must bump `.version` in
+[`package.json`](package.json) — including docs- and CI-only changes. That manifest is the only
+place the version lives, and for a Kiro power the release tag is what users pin with "Import from
+GitHub".
 
-1. In your PR, bump `.version` in `package.json`.
-2. Merge to `main`. Every push to `main` compares the version against the latest release tag: if
-   the version is newer, a release proceeds; if it matches the latest tag, the workflow fails with
-   a clear "already released" error; if it is older, it fails with a revert warning.
+Every push to `main` compares the version against the latest release tag: if the version is newer,
+a release proceeds; if it matches the latest tag, the workflow fails with a clear "already released"
+error; if it is older, it fails with a revert warning.
+
+A merge without a bump therefore turns `Release` red. That is by design, not a bug to work around:
+the bump is reviewed in the PR that makes it, and failing loudly beats silently skipping a release
+or re-tagging a shipped version. The `0.1.0` → `0.1.1` bump in the PR that introduced this flow is
+there for the same reason — so its first run on `main` publishes a real release instead of tripping
+the "already released" guard.
 
 The release workflow runs the full test and validate suite plus the steering, pin-sync and
 vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
-`gh release create --target`).
+`gh release create --target`, so a failed run can't leave a tag behind with no release attached to
+it). The rollback step that deletes a partially published release only runs when the version gate
+itself passed: a gate failure means the version was already released by an earlier run, and
+deleting that release would destroy something already shipped.
 
 ## Security issues
 

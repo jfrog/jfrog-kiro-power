@@ -18,7 +18,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # fetch-depth: 0 (plus `git fetch --tags` in the gate below) so the gate sees every release
+      # tag, including one created by a prior run that was still queued behind this one. No ancestry
+      # check is needed on top of that: this only runs on push to main, so HEAD is already on main.
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -28,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(jq -er '.version' package.json)
-          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::package.json version '$VERSION' is not X.Y.Z — refusing to release"
             exit 1
           fi
@@ -36,11 +39,15 @@ jobs:
 
       - name: Compare version against latest release tag
         id: release_gate
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
           git fetch --tags origin
-          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          # grep -E narrows the glob to exact vX.Y.Z. `|| true` because grep exits 1 when nothing
+          # matches, which under `pipefail` would fail the step instead of taking the first-release
+          # path below.
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
           if [ -z "$LATEST" ]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             echo "No prior release tag — v${VERSION} will be the first release"
@@ -60,34 +67,29 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "Version ${VERSION} is newer than ${LATEST} — proceeding with release"
 
-      - uses: actions/setup-node@v4
-        if: steps.release_gate.outputs.should_release == 'true'
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
 
       # Gate the release on the same checks as CI so a release can never ship broken steering/skills.
       - name: Validate before releasing
-        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm test
           npm run validate
 
       - name: Steering drift check
-        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run gen-steering
           git diff --exit-code -- steering/ \
             || { echo "::error::steering/ is stale at this release — regenerate and commit"; exit 1; }
 
       - name: Pin-sync drift check
-        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run sync-pin
           git diff --exit-code -- POWER.md README.md \
             || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this release — regenerate and commit"; exit 1; }
 
       - name: Vendoring drift check
-        if: steps.release_gate.outputs.should_release == 'true'
         run: |
           npm run sync-skills
           git diff --exit-code -- skills/ \
@@ -95,11 +97,20 @@ jobs:
 
       # --target creates the tag as part of the release, so a failure can't leave an orphan tag.
       - name: Create GitHub release
-        if: steps.release_gate.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
+          gh release create "v${VERSION}" \
             --target "$GITHUB_SHA" \
-            --title "v${{ steps.version.outputs.version }}" \
+            --title "v${VERSION}" \
             --generate-notes
+
+      # Only when the gate passed: a gate failure means the version was already released, and that
+      # release belongs to an earlier run — deleting it here would destroy a shipped release.
+      - name: Roll back a partially published release
+        if: failure() && steps.release_gate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release delete "v${VERSION}" --yes --cleanup-tag || true

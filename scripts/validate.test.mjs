@@ -469,7 +469,7 @@ test('extractTarToDir skips symlink entries instead of following or recreating t
   assert.equal(readFileSync(join(destDir, 'real-file.txt'), 'utf8'), 'ok', 'subsequent regular entry still lands');
 });
 
-// fetchTarGz runs unconditionally on every CI push/PR and release tag (the vendoring drift check), with
+// fetchTarGz runs unconditionally on every CI push/PR and every release (the vendoring drift check), with
 // no path filter — so a transient network blip must not fail an unrelated PR or block a release outright.
 // Mock global fetch rather than hitting the real network; retryDelayMs: 0 keeps these tests instant.
 function withMockFetch(impl, fn) {

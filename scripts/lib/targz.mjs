@@ -29,7 +29,7 @@ function sleep(ms) {
  * Public codeload endpoint — no auth.
  *
  * This is the one network call the vendoring pipeline makes, and it runs unconditionally on every
- * CI push/PR and every release tag (see .github/workflows/ci.yml and release.yml) — so a single
+ * CI push/PR and every release (see .github/workflows/ci.yml and release.yml) — so a single
  * transient network blip would otherwise fail an unrelated PR or block a release with zero code
  * involved. Retries with backoff on network errors and non-4xx-client-error responses (5xx, 429,
  * etc.); a 404 means the repo/ref genuinely doesn't exist, so it fails immediately instead of
