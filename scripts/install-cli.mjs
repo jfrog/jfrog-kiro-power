@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // (c) JFrog Ltd. (2026)
-// Installs the JFrog integration for the Kiro CLI (`kiro-cli`) — ADDITIVE, skills only.
+// Installs the JFrog integration for the Kiro CLI (`kiro-cli`) — ADDITIVE: skills, plus the JFrog MCP
+// server entry if `kiro-cli` is on PATH.
 //
 // kiro-cli is a SEPARATE runtime from the Kiro IDE — it does not read ~/.kiro/powers/, so it cannot
 // consume the IDE power (POWER.md). Its additive mechanism is skills (~/.kiro/skills/): the default
@@ -11,18 +12,26 @@
 // skills, so shipping it too would advertise JFrog twice within one CLI session.
 // It never installs a replacement --agent (a kiro-cli --agent is singular per session).
 //
-//   node scripts/install-cli.mjs               # additive: skills -> ~/.kiro (global)
-//   node scripts/install-cli.mjs --workspace   # additive: skills -> ./.kiro
+// kiro-cli also has its own MCP mechanism (`kiro-cli mcp add/list/status`), reading/writing the same
+// mcpServers.<name>.url shape as the IDE Power's mcp.json — just a different file
+// (~/.kiro/settings/mcp.json, via `kiro-cli mcp add --scope`). So this script registers the same
+// OAuth-by-default `jfrog` entry there too, provided `kiro-cli` is installed. It never overwrites an
+// existing `jfrog` entry (a user may have set their own URL) — see provisionMcp().
+//
+//   node scripts/install-cli.mjs               # additive: skills + MCP -> ~/.kiro (global)
+//   node scripts/install-cli.mjs --workspace   # additive: skills + MCP -> ./.kiro
 //
 // KIRO_HOME=<dir>  give the CLI its own profile (e.g. ~/.kiro-cli) instead of the default ~/.kiro, so
 // its skills never land where the IDE reads (see README "Running both surfaces on one machine").
 // Ignored with --workspace, which always scopes to ./.kiro regardless of KIRO_HOME.
 //
-// Phase 1 = skills only (no MCP). Dependency-free Node ESM; no network (copies the local embedded files).
+// Dependency-free Node ESM; the skills copy touches no network (copies the local embedded files). The
+// MCP step shells out to the local `kiro-cli` binary only — no network call of its own either.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -61,6 +70,35 @@ export async function installAdditive({ skillsSrc, dest }) {
   return { skills, skillsDest };
 }
 
+// Register the JFrog MCP entry via `kiro-cli mcp add`, mirroring the IDE Power's mcp.json (same
+// mcpServers.jfrog.url shape, same OAuth-by-default: no --oauth flag exists, and omitting a static
+// header/token is what makes kiro-cli auto-detect OAuth here too).
+//
+// Never overwrites an existing `jfrog` entry — a user may already have their own URL configured (as
+// happens when both the IDE and CLI share a profile). `kiro-cli mcp add` without --force exits non-zero
+// with "already exists" when the name is taken, which is exactly the skip signal we want.
+//
+// Returns 'added', 'skipped' (already present), or 'unavailable' (kiro-cli not on PATH) — never throws,
+// since the MCP step is a bonus on top of the skills install, not a hard requirement.
+export function provisionMcp({ scope, env = process.env, exec = execFileSync }) {
+  try {
+    exec('kiro-cli', ['--version'], { stdio: 'ignore', env });
+  } catch {
+    return 'unavailable';
+  }
+
+  try {
+    exec(
+      'kiro-cli',
+      ['mcp', 'add', '--name', 'jfrog', '--url', 'https://${JFROG_PLATFORM_URL}/mcp', '--scope', scope],
+      { stdio: 'pipe', env }
+    );
+    return 'added';
+  } catch {
+    return 'skipped';
+  }
+}
+
 async function main() {
   const workspace = process.argv.slice(2).includes('--workspace');
   const dest = resolveKiroDest({ workspace });
@@ -70,6 +108,16 @@ async function main() {
     dest,
   });
   for (const name of skills) console.log(`  skill     ${name} -> ${path.join(dest, 'skills', name)}`);
+
+  const mcpResult = provisionMcp({ scope: workspace ? 'workspace' : 'global' });
+  if (mcpResult === 'added') {
+    console.log(`  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, ${workspace ? 'workspace' : 'global'} scope)`);
+  } else if (mcpResult === 'skipped') {
+    console.log('  mcp       jfrog already configured — left untouched');
+  } else {
+    console.log('  mcp       skipped (kiro-cli not found on PATH) — install it, then run this again to add the JFrog MCP server');
+  }
+
   console.log(`\nJFrog composes into any kiro-cli session now. Just run:  kiro-cli chat`);
   console.log(`then ask a JFrog question (no --agent needed).`);
 }

@@ -15,7 +15,7 @@ import {
   validateSteeringFile,
   validateMcpJson,
 } from './validate.mjs';
-import { installAdditive, resolveKiroDest, expandHome } from './install-cli.mjs';
+import { installAdditive, resolveKiroDest, expandHome, provisionMcp } from './install-cli.mjs';
 import { installScripts } from './install-scripts.mjs';
 import {
   rewriteRefPointers,
@@ -186,6 +186,42 @@ test('expandHome expands a leading ~ since env vars are not shell-expanded', () 
   assert.equal(expandHome('~'), homedir());
   assert.equal(expandHome('~/foo'), join(homedir(), 'foo'));
   assert.equal(expandHome('/already/absolute'), '/already/absolute');
+});
+
+// provisionMcp mirrors the IDE Power's OAuth-by-default mcp.json entry into kiro-cli's own config via
+// `kiro-cli mcp add` — it must never overwrite a user's existing `jfrog` entry, and must degrade
+// gracefully (not throw) when kiro-cli isn't installed, since the MCP step is a bonus on top of the
+// skills install, not a hard requirement.
+test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the OAuth-default url and no --force', () => {
+  const calls = [];
+  const exec = (cmd, args) => {
+    calls.push([cmd, args]);
+    return '';
+  };
+  const result = provisionMcp({ scope: 'global', exec });
+
+  assert.equal(result, 'added');
+  assert.deepEqual(calls[0], ['kiro-cli', ['--version']]);
+  assert.deepEqual(calls[1], [
+    'kiro-cli',
+    ['mcp', 'add', '--name', 'jfrog', '--url', 'https://${JFROG_PLATFORM_URL}/mcp', '--scope', 'global'],
+  ]);
+  assert.ok(!calls[1][1].includes('--force'), 'must never force-overwrite an existing jfrog entry');
+});
+
+test('provisionMcp reports "skipped" when the jfrog entry already exists (kiro-cli mcp add exits non-zero)', () => {
+  const exec = (cmd, args) => {
+    if (args[0] === 'mcp') throw new Error("MCP server 'jfrog' already exists in global config");
+    return '';
+  };
+  assert.equal(provisionMcp({ scope: 'global', exec }), 'skipped');
+});
+
+test('provisionMcp reports "unavailable" instead of throwing when kiro-cli is not on PATH', () => {
+  const exec = () => {
+    throw new Error('command not found: kiro-cli');
+  };
+  assert.equal(provisionMcp({ scope: 'workspace', exec }), 'unavailable');
 });
 
 // gen-steering must render Power-safe steering: on-disk `references/<x>.md` and `scripts/*` pointers

@@ -12,6 +12,10 @@
 # installs a replacement --agent (a kiro-cli --agent is singular per session, so that would replace
 # the user's own).
 #
+# If `kiro-cli` is on PATH, it also registers the JFrog MCP server (`kiro-cli mcp add`) — same
+# OAuth-by-default mcpServers.jfrog.url entry the IDE Power's mcp.json ships, just written to
+# kiro-cli's own config (~/.kiro/settings/mcp.json). Never overwrites an existing `jfrog` entry.
+#
 # Options / env:
 #   --workspace                  install into ./.kiro/skills (this workspace) instead of ~/.kiro/skills
 #   KIRO_HOME=<dir>              give the CLI its own profile (e.g. ~/.kiro-cli) instead of ~/.kiro, so
@@ -22,8 +26,7 @@
 #
 # Installs globally into ~/.kiro (or $KIRO_HOME) by default (JFrog available in every kiro-cli
 # session). Pass --workspace to scope into ./.kiro instead (avoids duplicating the IDE power's
-# steering when you use both surfaces; note the CLI must then be run from this directory). Phase 1 =
-# skills only (no MCP).
+# steering when you use both surfaces; note the CLI must then be run from this directory).
 set -euo pipefail
 
 REPO="${JFROG_KIRO_REPO:-jfrog/jfrog-kiro-power}"
@@ -80,6 +83,21 @@ for d in "$SRC"/skills/*/; do
   cp -R "$d" "$SKILLS_DEST/$name"
   echo "  skill     $name"
 done
+
+# Register the JFrog MCP entry via `kiro-cli mcp add` (same mcpServers.jfrog.url shape as the IDE
+# Power's mcp.json — OAuth by default, no static token). Best-effort: skip entirely if kiro-cli isn't
+# on PATH yet, and never overwrite an existing `jfrog` entry (mcp add without --force exits non-zero
+# when the name is taken, which is exactly the skip signal we want).
+if command -v kiro-cli >/dev/null 2>&1; then
+  MCP_SCOPE="global"; [ "$WORKSPACE" = true ] && MCP_SCOPE="workspace"
+  if kiro-cli mcp add --name jfrog --url 'https://${JFROG_PLATFORM_URL}/mcp' --scope "$MCP_SCOPE" >/dev/null 2>&1; then
+    echo "  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, $MCP_SCOPE scope)"
+  else
+    echo "  mcp       jfrog already configured — left untouched"
+  fi
+else
+  echo "  mcp       skipped (kiro-cli not found on PATH) — install it, then re-run this script to add the JFrog MCP server"
+fi
 
 echo
 if [ "$WORKSPACE" = true ]; then
