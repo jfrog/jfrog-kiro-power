@@ -176,9 +176,11 @@ syntax, platform conventions, system repositories, and per-domain gotchas, load 
 steering file.
 
 > **JFrog MCP server.** This power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` —
-> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves. Once
-> connected, the `jfrog` steering prefers MCP tools over CLI subcommands/`jf api` for the operations they
-> cover.
+> set the `JFROG_PLATFORM_URL` environment variable to your platform hostname so it resolves. The entry
+> connects via **OAuth**, not a static bearer token: on first use, Kiro opens your browser to sign in to
+> the JFrog Platform, then caches the session. No access token is entered or stored in any config file.
+> Once connected, the `jfrog` steering prefers MCP tools over CLI subcommands/`jf api` for the operations
+> they cover.
 
 ## Server Selection Rules
 

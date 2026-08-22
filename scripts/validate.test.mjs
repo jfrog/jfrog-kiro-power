@@ -104,7 +104,7 @@ test('validateSteeringFile requires a valid inclusion mode and a description', (
 // ${JFROG_PLATFORM_URL} env-var placeholder (this file was deleted once already in this repo's history).
 test('validateMcpJson requires valid JSON and a properly-wired mcpServers.jfrog.url', () => {
   assert.deepEqual(
-    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp"}}}'),
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","oauth":{}}}}'),
     []
   );
   assert.ok(validateMcpJson(null).some((e) => e.includes('missing')));
@@ -114,6 +114,24 @@ test('validateMcpJson requires valid JSON and a properly-wired mcpServers.jfrog.
     validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://YOUR_JFROG_PLATFORM_URL/mcp"}}}').some((e) =>
       e.includes('must look like')
     )
+  );
+});
+
+// The jfrog MCP entry connects via OAuth, not a static bearer token — a `headers`/Authorization block or
+// `oauth: false` would silently regress it back to token auth (see the opencode-jfrog-plugin precedent of
+// removing exactly this), so the validator must fail the build if either reappears.
+test('validateMcpJson rejects a bearer-token regression (headers or oauth:false on the jfrog entry)', () => {
+  assert.ok(
+    validateMcpJson(
+      '{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","headers":{"Authorization":"Bearer ${TOKEN}"}}}}'
+    ).some((e) => e.includes('headers') && e.includes('OAuth')),
+    'a headers block must be flagged'
+  );
+  assert.ok(
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","oauth":false}}}').some(
+      (e) => e.includes('oauth: false')
+    ),
+    'oauth:false must be flagged'
   );
 });
 

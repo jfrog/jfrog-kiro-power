@@ -14,6 +14,8 @@ users/groups, setting up projects, checking package safety, and querying securit
 > platform through the `jf` CLI. The IDE Power also supports the JFrog remote **MCP server**: `mcp.json`
 > ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL` environment
 > variable to your platform hostname and it's used automatically once connected, no manual edit needed.
+> The connection uses **OAuth** (Kiro opens a browser sign-in on first use and caches the session) —
+> there's no bearer token to generate or paste into any config file.
 > **Agent Guard** (installing, listing, and removing other MCP servers) is already available now via the
 > `jfrog-mcp-management` skill. **MCP governance/enforcement** — controlling which MCP servers are
 > allowed — is a later-phase item; once it ships, the steering/skill will teach the power how to work
