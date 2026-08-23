@@ -88,7 +88,12 @@ A merge without a bump therefore turns `Release` red. That is by design, not a b
 the bump is reviewed in the PR that makes it, and failing loudly beats silently skipping a release
 or re-tagging a shipped version. The `0.1.0` → `0.1.1` bump in the PR that introduced this flow is
 there for the same reason — so its first run on `main` publishes a real release instead of tripping
-the "already released" guard.
+the "already released" guard. Skills-sync PRs that already bump to `0.1.1`
+([#5](https://github.com/jfrog/jfrog-kiro-power/pull/5),
+[#6](https://github.com/jfrog/jfrog-kiro-power/pull/6),
+[#8](https://github.com/jfrog/jfrog-kiro-power/pull/8)) will land that same version
+again after `v0.1.1` ships — rebase each onto `main` and bump to `0.1.2` or later
+before merging, or Release fails with "already released".
 
 The release workflow runs the full test and validate suite plus the steering, pin-sync and
 vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
