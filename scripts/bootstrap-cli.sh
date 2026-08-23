@@ -93,7 +93,7 @@ if command -v kiro-cli >/dev/null 2>&1; then
   if kiro-cli mcp add --name jfrog --url 'https://${JFROG_PLATFORM_URL}/mcp' --scope "$MCP_SCOPE" >/dev/null 2>&1; then
     echo "  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, $MCP_SCOPE scope)"
   else
-    echo "  mcp       jfrog already configured — left untouched"
+    echo "  mcp       jfrog skipped (already configured or error — re-run to retry)"
   fi
 else
   echo "  mcp       skipped (kiro-cli not found on PATH) — install it, then re-run this script to add the JFrog MCP server"

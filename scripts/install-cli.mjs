@@ -113,7 +113,7 @@ async function main() {
   if (mcpResult === 'added') {
     console.log(`  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, ${workspace ? 'workspace' : 'global'} scope)`);
   } else if (mcpResult === 'skipped') {
-    console.log('  mcp       jfrog already configured — left untouched');
+    console.log('  mcp       jfrog skipped (already configured or error — re-run to retry)');
   } else {
     console.log('  mcp       skipped (kiro-cli not found on PATH) — install it, then run this again to add the JFrog MCP server');
   }
