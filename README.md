@@ -224,7 +224,7 @@ A single-surface setup (only the IDE power, or only the CLI) has no duplication.
 
 **Uninstall:** `rm -rf ~/.kiro/skills/jfrog*` — or `rm -rf "$KIRO_HOME/skills/jfrog*"` if you installed
 with a custom `KIRO_HOME` — every JFrog skill dir is `jfrog*`-prefixed, so this leaves any of your own
-files untouched. The MCP entry can be removed separately with `kiro-cli mcp remove --name jfrog`.
+files untouched. The MCP entry can be removed separately with `kiro-cli mcp remove --name jfrog --scope global` (or `--scope workspace` if installed with `--workspace`).
 
 ## Development
 

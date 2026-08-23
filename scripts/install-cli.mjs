@@ -78,24 +78,35 @@ export async function installAdditive({ skillsSrc, dest }) {
 // happens when both the IDE and CLI share a profile). `kiro-cli mcp add` without --force exits non-zero
 // with "already exists" when the name is taken, which is exactly the skip signal we want.
 //
-// Returns 'added', 'skipped' (already present), or 'unavailable' (kiro-cli not on PATH) — never throws,
-// since the MCP step is a bonus on top of the skills install, not a hard requirement.
-export function provisionMcp({ scope, env = process.env, exec = execFileSync }) {
+// Returns 'added', 'skipped' (already present), 'unavailable' (kiro-cli not on PATH),
+// 'no-platform-url' (JFROG_PLATFORM_URL unset), or 'error' (genuine failure, stderr via onError).
+// Never throws; the MCP step is a bonus on top of the skills install, not a hard requirement.
+export function provisionMcp({ scope, env = process.env, exec = execFileSync, onError = undefined }) {
+  const isWin = process.platform === 'win32';
+  const opts = { shell: isWin, timeout: 10_000 };
+  const childEnv = { ...env };
+  if (childEnv.KIRO_HOME) childEnv.KIRO_HOME = expandHome(childEnv.KIRO_HOME);
+
   try {
-    exec('kiro-cli', ['--version'], { stdio: 'ignore', env });
+    exec('kiro-cli', ['--version'], { ...opts, stdio: 'ignore', env: childEnv });
   } catch {
     return 'unavailable';
   }
 
+  if (!childEnv.JFROG_PLATFORM_URL) return 'no-platform-url';
+
   try {
     exec(
       'kiro-cli',
-      ['mcp', 'add', '--name', 'jfrog', '--url', 'https://${JFROG_PLATFORM_URL}/mcp', '--scope', scope],
-      { stdio: 'pipe', env }
+      ['mcp', 'add', '--name', 'jfrog', '--url', `https://${childEnv.JFROG_PLATFORM_URL}/mcp`, '--scope', scope],
+      { ...opts, stdio: 'pipe', env: childEnv }
     );
     return 'added';
-  } catch {
-    return 'skipped';
+  } catch (err) {
+    const stderr = err.stderr?.toString() ?? err.message ?? '';
+    if (/already.exist/i.test(stderr)) return 'skipped';
+    onError?.(stderr.trim() || String(err));
+    return 'error';
   }
 }
 
@@ -109,11 +120,19 @@ async function main() {
   });
   for (const name of skills) console.log(`  skill     ${name} -> ${path.join(dest, 'skills', name)}`);
 
-  const mcpResult = provisionMcp({ scope: workspace ? 'workspace' : 'global' });
+  const mcpScope = workspace ? 'workspace' : 'global';
+  const mcpResult = provisionMcp({
+    scope: mcpScope,
+    onError: (msg) => process.stderr.write(`  mcp       error: ${msg}\n`),
+  });
   if (mcpResult === 'added') {
-    console.log(`  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, ${workspace ? 'workspace' : 'global'} scope)`);
+    console.log(`  mcp       jfrog -> https://${process.env.JFROG_PLATFORM_URL}/mcp (OAuth, ${mcpScope} scope)`);
   } else if (mcpResult === 'skipped') {
-    console.log('  mcp       jfrog skipped (already configured or error — re-run to retry)');
+    console.log('  mcp       jfrog skipped — entry already exists, leaving it untouched');
+  } else if (mcpResult === 'no-platform-url') {
+    console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
+  } else if (mcpResult === 'error') {
+    console.log('  mcp       jfrog registration failed — see error above');
   } else {
     console.log('  mcp       skipped (kiro-cli not found on PATH) — install it, then run this again to add the JFrog MCP server');
   }

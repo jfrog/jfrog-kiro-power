@@ -192,36 +192,54 @@ test('expandHome expands a leading ~ since env vars are not shell-expanded', () 
 // `kiro-cli mcp add` — it must never overwrite a user's existing `jfrog` entry, and must degrade
 // gracefully (not throw) when kiro-cli isn't installed, since the MCP step is a bonus on top of the
 // skills install, not a hard requirement.
-test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the OAuth-default url and no --force', () => {
+test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the resolved url and no --force', () => {
   const calls = [];
-  const exec = (cmd, args) => {
-    calls.push([cmd, args]);
-    return '';
-  };
-  const result = provisionMcp({ scope: 'global', exec });
+  const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
+  const result = provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec });
 
   assert.equal(result, 'added');
-  assert.deepEqual(calls[0], ['kiro-cli', ['--version']]);
+  assert.deepEqual(calls[0][1], ['--version']);
   assert.deepEqual(calls[1], [
     'kiro-cli',
-    ['mcp', 'add', '--name', 'jfrog', '--url', 'https://${JFROG_PLATFORM_URL}/mcp', '--scope', 'global'],
+    ['mcp', 'add', '--name', 'jfrog', '--url', 'https://my.jfrog.io/mcp', '--scope', 'global'],
   ]);
   assert.ok(!calls[1][1].includes('--force'), 'must never force-overwrite an existing jfrog entry');
 });
 
+test('provisionMcp returns "no-platform-url" when JFROG_PLATFORM_URL is not set', () => {
+  const exec = () => '';
+  assert.equal(provisionMcp({ scope: 'global', env: {}, exec }), 'no-platform-url');
+});
+
 test('provisionMcp reports "skipped" when the jfrog entry already exists (kiro-cli mcp add exits non-zero)', () => {
   const exec = (cmd, args) => {
-    if (args[0] === 'mcp') throw new Error("MCP server 'jfrog' already exists in global config");
+    if (args[0] === 'mcp') { const e = new Error(); e.stderr = Buffer.from("already exists"); throw e; }
     return '';
   };
-  assert.equal(provisionMcp({ scope: 'global', exec }), 'skipped');
+  assert.equal(provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec }), 'skipped');
+});
+
+test('provisionMcp reports "error" and forwards stderr for genuine failures', () => {
+  const exec = (cmd, args) => {
+    if (args[0] === 'mcp') { const e = new Error(); e.stderr = Buffer.from('unknown flag --scope'); throw e; }
+    return '';
+  };
+  const errors = [];
+  const result = provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec, onError: (m) => errors.push(m) });
+  assert.equal(result, 'error');
+  assert.ok(errors[0].includes('unknown flag'));
 });
 
 test('provisionMcp reports "unavailable" instead of throwing when kiro-cli is not on PATH', () => {
-  const exec = () => {
-    throw new Error('command not found: kiro-cli');
-  };
-  assert.equal(provisionMcp({ scope: 'workspace', exec }), 'unavailable');
+  const exec = () => { throw new Error('command not found: kiro-cli'); };
+  assert.equal(provisionMcp({ scope: 'workspace', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec }), 'unavailable');
+});
+
+test('provisionMcp expands a leading ~ in KIRO_HOME before passing to kiro-cli', () => {
+  const envsSeen = [];
+  const exec = (cmd, args, opts) => { envsSeen.push(opts?.env?.KIRO_HOME); return ''; };
+  provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io', KIRO_HOME: '~/.kiro-cli' }, exec });
+  assert.ok(envsSeen[0] && !envsSeen[0].startsWith('~'));
 });
 
 // gen-steering must render Power-safe steering: on-disk `references/<x>.md` and `scripts/*` pointers

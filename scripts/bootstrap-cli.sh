@@ -84,16 +84,20 @@ for d in "$SRC"/skills/*/; do
   echo "  skill     $name"
 done
 
-# Register the JFrog MCP entry via `kiro-cli mcp add` (same mcpServers.jfrog.url shape as the IDE
-# Power's mcp.json — OAuth by default, no static token). Best-effort: skip entirely if kiro-cli isn't
-# on PATH yet, and never overwrite an existing `jfrog` entry (mcp add without --force exits non-zero
-# when the name is taken, which is exactly the skip signal we want).
+# Register the JFrog MCP entry. URL resolved now (kiro-cli may not expand ${VAR} at runtime).
+# KIRO_HOME expanded so kiro-cli reads from the right directory when it was given as ~/...
+[ -n "${KIRO_HOME:-}" ] && KIRO_HOME="${KIRO_HOME/#\~/$HOME}"
 if command -v kiro-cli >/dev/null 2>&1; then
   MCP_SCOPE="global"; [ "$WORKSPACE" = true ] && MCP_SCOPE="workspace"
-  if kiro-cli mcp add --name jfrog --url 'https://${JFROG_PLATFORM_URL}/mcp' --scope "$MCP_SCOPE" >/dev/null 2>&1; then
-    echo "  mcp       jfrog -> https://\${JFROG_PLATFORM_URL}/mcp (OAuth, $MCP_SCOPE scope)"
+  if [ -z "${JFROG_PLATFORM_URL:-}" ]; then
+    echo "  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope $MCP_SCOPE"
   else
-    echo "  mcp       jfrog skipped (already configured or error — re-run to retry)"
+    MCP_URL="https://${JFROG_PLATFORM_URL}/mcp"
+    set +e; MCP_OUT="$(kiro-cli mcp add --name jfrog --url "$MCP_URL" --scope "$MCP_SCOPE" 2>&1)"; MCP_EXIT=$?; set -e
+    if   [ "$MCP_EXIT" = "0" ]; then echo "  mcp       jfrog -> $MCP_URL (OAuth, $MCP_SCOPE scope)"
+    elif echo "$MCP_OUT" | grep -qi "already"; then echo "  mcp       jfrog skipped — entry already exists, leaving it untouched"
+    else echo "  mcp       jfrog registration failed — ${MCP_OUT}" >&2
+    fi
   fi
 else
   echo "  mcp       skipped (kiro-cli not found on PATH) — install it, then re-run this script to add the JFrog MCP server"
