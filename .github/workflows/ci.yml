@@ -26,6 +26,12 @@ jobs:
       - name: Validate skills, POWER.md, and steering
         run: npm run validate
 
+      - name: Validate docs have no plugin or skill release versions
+        env:
+          DOCS: README.md POWER.md
+          PLUGIN_MANIFEST: package.json
+        run: node scripts/validate-readme-no-version.mjs
+
       # steering/ is generated from skills/ by gen-steering.mjs. It must equal a fresh render,
       # i.e. it was regenerated (not hand-edited) after the last skills change.
       - name: Steering drift check
@@ -35,17 +41,6 @@ jobs:
             || { echo "::error::steering/ is stale — run 'npm run gen-steering' and commit the result"; exit 1; }
 
       # skills/ is vendored from jfrog/jfrog-skills at the pin in sync-skills-vendor.json. Re-vendoring
-      # must produce no diff (the committed tree is byte-identical to the pinned upstream). Runs last
-      # because sync-skills rewrites skills/.
-      # The IDE fetches helper scripts using the tag hardcoded in POWER.md/README. It must equal the
-      # pin the steering was generated at, or on-demand scripts could mismatch the shipped steering.
-      - name: Pin-sync drift check
-        run: |
-          npm run sync-pin
-          git diff --exit-code -- POWER.md README.md \
-            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json — run 'npm run sync-pin' and commit"; exit 1; }
-
-      # Runs last: sync-skills rewrites skills/ from the pinned upstream; it must produce no diff.
       - name: Vendoring drift check
         run: |
           npm run sync-skills
