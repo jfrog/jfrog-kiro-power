@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 // (c) JFrog Ltd. (2026)
-// Installs the JFrog integration for the Kiro CLI (`kiro-cli`) — ADDITIVE: skills, plus the JFrog MCP
-// server entry if `kiro-cli` is on PATH.
 //
 // kiro-cli is a SEPARATE runtime from the Kiro IDE — it does not read ~/.kiro/powers/, so it cannot
 // consume the IDE power (POWER.md). Its additive mechanism is skills (~/.kiro/skills/): the default
@@ -11,10 +9,6 @@
 // IDE power's channel and is intentionally NOT copied here — the steering is generated from these same
 // skills, so shipping it too would advertise JFrog twice within one CLI session.
 // It never installs a replacement --agent (a kiro-cli --agent is singular per session).
-//
-// Also registers the OAuth-by-default `jfrog` MCP entry via `kiro-cli mcp add` when kiro-cli is on
-// PATH (same mcpServers.jfrog.url shape as the IDE Power's mcp.json). Never overwrites an existing
-// entry — see provisionMcp().
 //
 //   node scripts/install-cli.mjs               # additive: skills + MCP -> ~/.kiro (global)
 //   node scripts/install-cli.mjs --workspace   # additive: skills + MCP -> ./.kiro
@@ -68,10 +62,6 @@ export async function installAdditive({ skillsSrc, dest }) {
   return { skills, skillsDest };
 }
 
-// Registers the JFrog MCP entry via `kiro-cli mcp add` (OAuth-by-default: no static header/token).
-// Never overwrites an existing `jfrog` entry — `kiro-cli mcp add` without --force exits non-zero
-// with "already exists", which is the skip signal.
-// Returns 'added', 'skipped', 'unavailable', 'no-platform-url', or 'error'. Never throws.
 export function provisionMcp({ scope, env = process.env, exec = execFileSync, onError = undefined }) {
   const isWin = process.platform === 'win32';
   const opts = { shell: isWin, timeout: 10_000 };
