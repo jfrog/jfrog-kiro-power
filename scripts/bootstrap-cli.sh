@@ -12,9 +12,7 @@
 # installs a replacement --agent (a kiro-cli --agent is singular per session, so that would replace
 # the user's own).
 #
-# If `kiro-cli` is on PATH, it also registers the JFrog MCP server (`kiro-cli mcp add`) — same
-# OAuth-by-default mcpServers.jfrog.url entry the IDE Power's mcp.json ships, just written to
-# kiro-cli's own config (~/.kiro/settings/mcp.json). Never overwrites an existing `jfrog` entry.
+# If `kiro-cli` is on PATH, also registers the JFrog MCP server (OAuth, no overwrite of existing entry).
 #
 # Options / env:
 #   --workspace                  install into ./.kiro/skills (this workspace) instead of ~/.kiro/skills

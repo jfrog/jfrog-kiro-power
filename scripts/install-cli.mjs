@@ -12,11 +12,9 @@
 // skills, so shipping it too would advertise JFrog twice within one CLI session.
 // It never installs a replacement --agent (a kiro-cli --agent is singular per session).
 //
-// kiro-cli also has its own MCP mechanism (`kiro-cli mcp add/list/status`), reading/writing the same
-// mcpServers.<name>.url shape as the IDE Power's mcp.json — just a different file
-// (~/.kiro/settings/mcp.json, via `kiro-cli mcp add --scope`). So this script registers the same
-// OAuth-by-default `jfrog` entry there too, provided `kiro-cli` is installed. It never overwrites an
-// existing `jfrog` entry (a user may have set their own URL) — see provisionMcp().
+// Also registers the OAuth-by-default `jfrog` MCP entry via `kiro-cli mcp add` when kiro-cli is on
+// PATH (same mcpServers.jfrog.url shape as the IDE Power's mcp.json). Never overwrites an existing
+// entry — see provisionMcp().
 //
 //   node scripts/install-cli.mjs               # additive: skills + MCP -> ~/.kiro (global)
 //   node scripts/install-cli.mjs --workspace   # additive: skills + MCP -> ./.kiro
@@ -70,17 +68,10 @@ export async function installAdditive({ skillsSrc, dest }) {
   return { skills, skillsDest };
 }
 
-// Register the JFrog MCP entry via `kiro-cli mcp add`, mirroring the IDE Power's mcp.json (same
-// mcpServers.jfrog.url shape, same OAuth-by-default: no --oauth flag exists, and omitting a static
-// header/token is what makes kiro-cli auto-detect OAuth here too).
-//
-// Never overwrites an existing `jfrog` entry — a user may already have their own URL configured (as
-// happens when both the IDE and CLI share a profile). `kiro-cli mcp add` without --force exits non-zero
-// with "already exists" when the name is taken, which is exactly the skip signal we want.
-//
-// Returns 'added', 'skipped' (already present), 'unavailable' (kiro-cli not on PATH),
-// 'no-platform-url' (JFROG_PLATFORM_URL unset), or 'error' (genuine failure, stderr via onError).
-// Never throws; the MCP step is a bonus on top of the skills install, not a hard requirement.
+// Registers the JFrog MCP entry via `kiro-cli mcp add` (OAuth-by-default: no static header/token).
+// Never overwrites an existing `jfrog` entry — `kiro-cli mcp add` without --force exits non-zero
+// with "already exists", which is the skip signal.
+// Returns 'added', 'skipped', 'unavailable', 'no-platform-url', or 'error'. Never throws.
 export function provisionMcp({ scope, env = process.env, exec = execFileSync, onError = undefined }) {
   const isWin = process.platform === 'win32';
   const opts = { shell: isWin, timeout: 10_000 };

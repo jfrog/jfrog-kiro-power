@@ -188,10 +188,8 @@ test('expandHome expands a leading ~ since env vars are not shell-expanded', () 
   assert.equal(expandHome('/already/absolute'), '/already/absolute');
 });
 
-// provisionMcp mirrors the IDE Power's OAuth-by-default mcp.json entry into kiro-cli's own config via
-// `kiro-cli mcp add` — it must never overwrite a user's existing `jfrog` entry, and must degrade
-// gracefully (not throw) when kiro-cli isn't installed, since the MCP step is a bonus on top of the
-// skills install, not a hard requirement.
+// provisionMcp must never overwrite an existing `jfrog` entry and must not throw when kiro-cli is
+// absent — the MCP step is a bonus on top of skills, not a hard requirement.
 test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the resolved url and no --force', () => {
   const calls = [];
   const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
