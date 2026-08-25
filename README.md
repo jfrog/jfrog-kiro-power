@@ -193,9 +193,10 @@ version with `JFROG_KIRO_REF=<tag|branch>`. Offline/local bootstrap:
 
 If `kiro-cli` is on PATH, both installers also register the JFrog **MCP server** via `kiro-cli mcp add`
 — the same `mcpServers.jfrog.url` entry the IDE Power's `mcp.json` ships (OAuth by default, no bearer
-token), just written to kiro-cli's own config instead. Best-effort: skipped silently if `kiro-cli` isn't
-installed yet (re-run the installer once it is), and it never overwrites an existing `jfrog` entry, so a
-URL you've already configured is left alone.
+token), just written to kiro-cli's own config instead. Best-effort: if `kiro-cli` isn't installed yet,
+both installers print a `mcp skipped (kiro-cli not found on PATH)` line rather than failing (re-run the
+installer once it is), and neither overwrites an existing `jfrog` entry, so a URL you've already
+configured is left alone.
 
 Use it — no `--agent` needed:
 

@@ -62,6 +62,21 @@ export async function installAdditive({ skillsSrc, dest }) {
   return { skills, skillsDest };
 }
 
+// Only a bare host[:port] is accepted — no path, no userinfo, no shell metacharacters. On Windows,
+// provisionMcp calls execFileSync with shell: true, which joins args into one command line without
+// escaping; JFROG_PLATFORM_URL is otherwise unvalidated user input, so this is the guard against that.
+// bootstrap-cli.sh applies the identical rule so both installers write the same MCP url (see README).
+const HOST_RE = /^[A-Za-z0-9.-]+(?::\d{1,5})?$/;
+
+// Resolve JFROG_PLATFORM_URL into a full MCP url, or null if it isn't a valid bare host[:port]. Keeps
+// an explicit http:// scheme (defaults to https otherwise) instead of always forcing https.
+export function resolvePlatformUrl(rawUrl) {
+  const match = /^(https?):\/\//i.exec(rawUrl);
+  const scheme = match ? match[1].toLowerCase() : 'https';
+  const host = rawUrl.slice(match ? match[0].length : 0).replace(/\/+$/, '');
+  return HOST_RE.test(host) ? `${scheme}://${host}/mcp` : null;
+}
+
 export function provisionMcp({ scope, env = process.env, exec = execFileSync, onError = undefined }) {
   const isWin = process.platform === 'win32';
   const opts = { shell: isWin, timeout: 10_000 };
@@ -76,8 +91,8 @@ export function provisionMcp({ scope, env = process.env, exec = execFileSync, on
 
   if (!childEnv.JFROG_PLATFORM_URL) return 'no-platform-url';
 
-  const rawHost = childEnv.JFROG_PLATFORM_URL.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-  const mcpUrl = `https://${rawHost}/mcp`;
+  const mcpUrl = resolvePlatformUrl(childEnv.JFROG_PLATFORM_URL);
+  if (!mcpUrl) return 'invalid-platform-url';
 
   try {
     exec(
@@ -110,12 +125,13 @@ async function main() {
     onError: (msg) => process.stderr.write(`  mcp       error: ${msg}\n`),
   });
   if (mcpResult === 'added') {
-    const logHost = (process.env.JFROG_PLATFORM_URL || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-    console.log(`  mcp       jfrog -> https://${logHost}/mcp (OAuth, ${mcpScope} scope)`);
+    console.log(`  mcp       jfrog -> ${resolvePlatformUrl(process.env.JFROG_PLATFORM_URL)} (OAuth, ${mcpScope} scope)`);
   } else if (mcpResult === 'skipped') {
     console.log('  mcp       jfrog skipped — entry already exists, leaving it untouched');
   } else if (mcpResult === 'no-platform-url') {
     console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
+  } else if (mcpResult === 'invalid-platform-url') {
+    console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL ("${process.env.JFROG_PLATFORM_URL}") is not a valid host; set it to just the platform hostname (e.g. my.jfrog.io) and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
   } else if (mcpResult === 'error') {
     console.log('  mcp       jfrog registration failed — see error above');
   } else {

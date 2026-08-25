@@ -89,12 +89,26 @@ if command -v kiro-cli >/dev/null 2>&1; then
   if [ -z "${JFROG_PLATFORM_URL:-}" ]; then
     echo "  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope $MCP_SCOPE"
   else
-    CLEAN_HOST="${JFROG_PLATFORM_URL#https://}"; CLEAN_HOST="${CLEAN_HOST#http://}"; CLEAN_HOST="${CLEAN_HOST%/}"
-    MCP_URL="https://${CLEAN_HOST}/mcp"
-    set +e; MCP_OUT="$(kiro-cli mcp add --name jfrog --url "$MCP_URL" --scope "$MCP_SCOPE" 2>&1)"; MCP_EXIT=$?; set -e
-    if   [ "$MCP_EXIT" = "0" ]; then echo "  mcp       jfrog -> $MCP_URL (OAuth, $MCP_SCOPE scope)"
-    elif echo "$MCP_OUT" | grep -qi "already exist"; then echo "  mcp       jfrog skipped — entry already exists, leaving it untouched"
-    else echo "  mcp       jfrog registration failed — ${MCP_OUT}" >&2
+    # Mirror install-cli.mjs's resolvePlatformUrl(): keep an explicit http:// scheme (default https),
+    # strip the scheme case-insensitively and all trailing slashes, then require a bare host[:port] —
+    # no path, no userinfo, no shell metacharacters (JFROG_PLATFORM_URL feeds a command line below).
+    SCHEME="https"
+    case "$JFROG_PLATFORM_URL" in
+      [Hh][Tt][Tt][Pp][Ss]://*) CLEAN_HOST="${JFROG_PLATFORM_URL#*://}" ;;
+      [Hh][Tt][Tt][Pp]://*)     SCHEME="http"; CLEAN_HOST="${JFROG_PLATFORM_URL#*://}" ;;
+      *)                        CLEAN_HOST="$JFROG_PLATFORM_URL" ;;
+    esac
+    while [ "${CLEAN_HOST%/}" != "$CLEAN_HOST" ]; do CLEAN_HOST="${CLEAN_HOST%/}"; done
+
+    if ! [[ "$CLEAN_HOST" =~ ^[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
+      echo "  mcp       jfrog skipped — JFROG_PLATFORM_URL '$JFROG_PLATFORM_URL' is not a valid host; set it to just the platform hostname (e.g. my.jfrog.io) and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope $MCP_SCOPE" >&2
+    else
+      MCP_URL="${SCHEME}://${CLEAN_HOST}/mcp"
+      set +e; MCP_OUT="$(kiro-cli mcp add --name jfrog --url "$MCP_URL" --scope "$MCP_SCOPE" 2>&1)"; MCP_EXIT=$?; set -e
+      if   [ "$MCP_EXIT" = "0" ]; then echo "  mcp       jfrog -> $MCP_URL (OAuth, $MCP_SCOPE scope)"
+      elif echo "$MCP_OUT" | grep -qi "already exist"; then echo "  mcp       jfrog skipped — entry already exists, leaving it untouched"
+      else echo "  mcp       jfrog registration failed — ${MCP_OUT}" >&2
+      fi
     fi
   fi
 else
