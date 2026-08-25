@@ -206,6 +206,13 @@ test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the resolved
   assert.ok(!calls[1][1].includes('--force'), 'must never force-overwrite an existing jfrog entry');
 });
 
+test('provisionMcp strips a scheme prefix and trailing slash from JFROG_PLATFORM_URL before constructing the url', () => {
+  const calls = [];
+  const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
+  provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'https://my.jfrog.io/' }, exec });
+  assert.deepEqual(calls[1][1][5], 'https://my.jfrog.io/mcp', 'scheme and trailing slash must be stripped');
+});
+
 test('provisionMcp returns "no-platform-url" when JFROG_PLATFORM_URL is not set', () => {
   const exec = () => '';
   assert.equal(provisionMcp({ scope: 'global', env: {}, exec }), 'no-platform-url');

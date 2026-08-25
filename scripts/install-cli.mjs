@@ -95,10 +95,13 @@ export function provisionMcp({ scope, env = process.env, exec = execFileSync, on
 
   if (!childEnv.JFROG_PLATFORM_URL) return 'no-platform-url';
 
+  const rawHost = childEnv.JFROG_PLATFORM_URL.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const mcpUrl = `https://${rawHost}/mcp`;
+
   try {
     exec(
       'kiro-cli',
-      ['mcp', 'add', '--name', 'jfrog', '--url', `https://${childEnv.JFROG_PLATFORM_URL}/mcp`, '--scope', scope],
+      ['mcp', 'add', '--name', 'jfrog', '--url', mcpUrl, '--scope', scope],
       { ...opts, stdio: 'pipe', env: childEnv }
     );
     return 'added';
@@ -126,7 +129,8 @@ async function main() {
     onError: (msg) => process.stderr.write(`  mcp       error: ${msg}\n`),
   });
   if (mcpResult === 'added') {
-    console.log(`  mcp       jfrog -> https://${process.env.JFROG_PLATFORM_URL}/mcp (OAuth, ${mcpScope} scope)`);
+    const logHost = (process.env.JFROG_PLATFORM_URL || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    console.log(`  mcp       jfrog -> https://${logHost}/mcp (OAuth, ${mcpScope} scope)`);
   } else if (mcpResult === 'skipped') {
     console.log('  mcp       jfrog skipped — entry already exists, leaving it untouched');
   } else if (mcpResult === 'no-platform-url') {

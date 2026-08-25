@@ -92,10 +92,11 @@ if command -v kiro-cli >/dev/null 2>&1; then
   if [ -z "${JFROG_PLATFORM_URL:-}" ]; then
     echo "  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope $MCP_SCOPE"
   else
-    MCP_URL="https://${JFROG_PLATFORM_URL}/mcp"
+    CLEAN_HOST="${JFROG_PLATFORM_URL#https://}"; CLEAN_HOST="${CLEAN_HOST#http://}"; CLEAN_HOST="${CLEAN_HOST%/}"
+    MCP_URL="https://${CLEAN_HOST}/mcp"
     set +e; MCP_OUT="$(kiro-cli mcp add --name jfrog --url "$MCP_URL" --scope "$MCP_SCOPE" 2>&1)"; MCP_EXIT=$?; set -e
     if   [ "$MCP_EXIT" = "0" ]; then echo "  mcp       jfrog -> $MCP_URL (OAuth, $MCP_SCOPE scope)"
-    elif echo "$MCP_OUT" | grep -qi "already"; then echo "  mcp       jfrog skipped — entry already exists, leaving it untouched"
+    elif echo "$MCP_OUT" | grep -qi "already exist"; then echo "  mcp       jfrog skipped — entry already exists, leaving it untouched"
     else echo "  mcp       jfrog registration failed — ${MCP_OUT}" >&2
     fi
   fi
