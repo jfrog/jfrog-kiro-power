@@ -13,7 +13,6 @@
 # the user's own).
 #
 # If `kiro-cli` is on PATH, also registers the JFrog MCP server (OAuth, no overwrite of existing entry).
-#
 # Options / env:
 #   --workspace                  install into ./.kiro/skills (this workspace) instead of ~/.kiro/skills
 #   KIRO_HOME=<dir>              give the CLI its own profile (e.g. ~/.kiro-cli) instead of ~/.kiro, so
