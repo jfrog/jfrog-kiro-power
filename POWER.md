@@ -135,19 +135,19 @@ so the id matches — the agent activates the power by this name.
   from your path and does **not** copy it into `~/.kiro/powers/installed/<name>/`, so the `kiro_powers`
   activation tool can't find it there. Solutions, best first:
   1. **Install from GitHub** (Powers → Add Custom Power → Import from GitHub) — Kiro copies the files into
-     `installed/jfrog/` and `kiro_powers` works. This is the recommended path for real testing.
+     `installed/jfrog-kiro-power/` and `kiro_powers` works. This is the recommended path for real testing.
   2. Or **stage the installed dir** to match a GitHub install (local dev workaround):
      ```bash
-     mkdir -p ~/.kiro/powers/installed/jfrog
-     cp POWER.md mcp.json ~/.kiro/powers/installed/jfrog/
-     rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
+     mkdir -p ~/.kiro/powers/installed/jfrog-kiro-power
+     cp POWER.md mcp.json ~/.kiro/powers/installed/jfrog-kiro-power/
+     rm -rf ~/.kiro/powers/installed/jfrog-kiro-power/steering && cp -R steering ~/.kiro/powers/installed/jfrog-kiro-power/
      # then fully quit & reopen Kiro
      ```
   3. Or skip activation entirely and **load the steering manually** with `#jfrog` (see below) — enough to
      iterate on steering content.
 - **`~/.kiro/powers/installed/` is empty after a folder import.** Expected — folder imports are
   referenced in place from your local path (see the registry's `source.path`). A **GitHub** import copies
-  `POWER.md` + `steering/` into `~/.kiro/powers/installed/jfrog/`. Either is fine as long as the power is
+  `POWER.md` + `steering/` into `~/.kiro/powers/installed/jfrog-kiro-power/`. Either is fine as long as the power is
   active in the Powers panel.
 - **Steering doesn't auto-load.** Pull it manually with `#jfrog` (foundational) or `#jfrog-references`
   (deep API/AQL detail). If you want it always on, a workspace can also copy these files into
