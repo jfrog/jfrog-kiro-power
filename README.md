@@ -11,9 +11,13 @@ Both enable AI-assisted JFrog Platform workflows — searching artifacts, managi
 users/groups, setting up projects, checking package safety, and querying security metadata.
 
 > **Phase 1 — skills first, MCP supported.** Both surfaces ship the JFrog skill knowledge and drive the
-> platform through the `jf` CLI. The IDE Power also supports the JFrog remote **MCP server**: `mcp.json`
-> ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp` — set the `JFROG_PLATFORM_URL` environment
-> variable to your platform hostname and it's used automatically once connected, no manual edit needed.
+> platform through the `jf` CLI. Both surfaces also support the JFrog remote **MCP server**: the IDE
+> Power's `mcp.json` ships pre-wired to `https://${JFROG_PLATFORM_URL}/mcp`, and `kiro-cli`'s installers
+> (`npm run install-cli` / `bootstrap-cli.sh`) register the same entry via `kiro-cli mcp add` if
+> `kiro-cli` is on PATH. Set the `JFROG_PLATFORM_URL` environment variable to your platform hostname and
+> it's used automatically once connected, no manual edit needed. The connection uses **OAuth** (Kiro
+> opens a browser sign-in on first use and caches the session) — there's no bearer token to generate or
+> paste into any config file.
 > **Agent Guard** (installing, listing, and removing other MCP servers) is already available now via the
 > `jfrog-mcp-management` skill. **MCP governance/enforcement** — controlling which MCP servers are
 > allowed — is a later-phase item; once it ships, the steering/skill will teach the power how to work
@@ -187,6 +191,13 @@ published release** by default (falling back to `main` if there are no releases 
 version with `JFROG_KIRO_REF=<tag|branch>`. Offline/local bootstrap:
 `KIRO_POWER_SRC=<checkout> bash scripts/bootstrap-cli.sh`.
 
+If `kiro-cli` is on PATH, both installers also register the JFrog **MCP server** via `kiro-cli mcp add`
+— the same `mcpServers.jfrog.url` entry the IDE Power's `mcp.json` ships (OAuth by default, no bearer
+token), just written to kiro-cli's own config instead. Best-effort: if `kiro-cli` isn't installed yet,
+both installers print a `mcp skipped (kiro-cli not found on PATH)` line rather than failing (re-run the
+installer once it is), and neither overwrites an existing `jfrog` entry, so a URL you've already
+configured is left alone.
+
 Use it — no `--agent` needed:
 
 ```bash
@@ -214,10 +225,7 @@ A single-surface setup (only the IDE power, or only the CLI) has no duplication.
 
 **Uninstall:** `rm -rf ~/.kiro/skills/jfrog*` — or `rm -rf "$KIRO_HOME/skills/jfrog*"` if you installed
 with a custom `KIRO_HOME` — every JFrog skill dir is `jfrog*`-prefixed, so this leaves any of your own
-files untouched.
-
-> Phase 1 = skills only for kiro-cli — it has no MCP client mechanism at all (unlike the IDE Power,
-> which does support the JFrog remote MCP server — see the Phase 1 note above).
+files untouched. The MCP entry can be removed separately with `kiro-cli mcp remove --name jfrog --scope global` (or `--scope workspace` if installed with `--workspace`).
 
 ## Development
 

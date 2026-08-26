@@ -15,7 +15,9 @@ import {
   validateSteeringFile,
   validateMcpJson,
 } from './validate.mjs';
-import { installAdditive, resolveKiroDest, expandHome } from './install-cli.mjs';
+import { installAdditive, resolveKiroDest, expandHome, provisionMcp, resolvePlatformUrl } from './install-cli.mjs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync } from 'node:fs';
 import { installScripts } from './install-scripts.mjs';
 import {
   rewriteRefPointers,
@@ -117,6 +119,24 @@ test('validateMcpJson requires valid JSON and a properly-wired mcpServers.jfrog.
   );
 });
 
+// The jfrog MCP entry connects via OAuth, not a static bearer token — a `headers`/Authorization block or
+// `oauth: false` would silently regress it back to token auth (see the opencode-jfrog-plugin precedent of
+// removing exactly this), so the validator must fail the build if either reappears.
+test('validateMcpJson rejects a bearer-token regression (headers or oauth:false on the jfrog entry)', () => {
+  assert.ok(
+    validateMcpJson(
+      '{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","headers":{"Authorization":"Bearer ${TOKEN}"}}}}'
+    ).some((e) => e.includes('headers') && e.includes('OAuth')),
+    'a headers block must be flagged'
+  );
+  assert.ok(
+    validateMcpJson('{"mcpServers":{"jfrog":{"url":"https://${JFROG_PLATFORM_URL}/mcp","oauth":false}}}').some(
+      (e) => e.includes('oauth: false')
+    ),
+    'oauth:false must be flagged'
+  );
+});
+
 // The CLI installer's additive copy is the primary path: it must land the vendored skills/ into
 // <dest> (skills only — steering is the IDE power's channel, not the CLI's) and be idempotent
 // (a re-run yields byte-identical files).
@@ -168,6 +188,147 @@ test('expandHome expands a leading ~ since env vars are not shell-expanded', () 
   assert.equal(expandHome('~'), homedir());
   assert.equal(expandHome('~/foo'), join(homedir(), 'foo'));
   assert.equal(expandHome('/already/absolute'), '/already/absolute');
+});
+
+// provisionMcp must never overwrite an existing `jfrog` entry and must not throw when kiro-cli is
+// absent — the MCP step is a bonus on top of skills, not a hard requirement.
+test('provisionMcp adds the jfrog entry via `kiro-cli mcp add` with the resolved url and no --force', () => {
+  const calls = [];
+  const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
+  const result = provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec });
+
+  assert.equal(result, 'added');
+  assert.deepEqual(calls[0][1], ['--version']);
+  assert.deepEqual(calls[1], [
+    'kiro-cli',
+    ['mcp', 'add', '--name', 'jfrog', '--url', 'https://my.jfrog.io/mcp', '--scope', 'global'],
+  ]);
+  assert.ok(!calls[1][1].includes('--force'), 'must never force-overwrite an existing jfrog entry');
+});
+
+test('provisionMcp strips a scheme prefix and trailing slash from JFROG_PLATFORM_URL before constructing the url', () => {
+  const calls = [];
+  const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
+  provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'https://my.jfrog.io/' }, exec });
+  assert.deepEqual(calls[1][1][5], 'https://my.jfrog.io/mcp', 'scheme and trailing slash must be stripped');
+});
+
+test('provisionMcp returns "no-platform-url" when JFROG_PLATFORM_URL is not set', () => {
+  const exec = () => '';
+  assert.equal(provisionMcp({ scope: 'global', env: {}, exec }), 'no-platform-url');
+});
+
+test('provisionMcp reports "skipped" when the jfrog entry already exists (kiro-cli mcp add exits non-zero)', () => {
+  const exec = (cmd, args) => {
+    if (args[0] === 'mcp') { const e = new Error(); e.stderr = Buffer.from("already exists"); throw e; }
+    return '';
+  };
+  assert.equal(provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec }), 'skipped');
+});
+
+test('provisionMcp reports "error" and forwards stderr for genuine failures', () => {
+  const exec = (cmd, args) => {
+    if (args[0] === 'mcp') { const e = new Error(); e.stderr = Buffer.from('unknown flag --scope'); throw e; }
+    return '';
+  };
+  const errors = [];
+  const result = provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec, onError: (m) => errors.push(m) });
+  assert.equal(result, 'error');
+  assert.ok(errors[0].includes('unknown flag'));
+});
+
+test('provisionMcp reports "unavailable" instead of throwing when kiro-cli is not on PATH', () => {
+  const exec = () => { throw new Error('command not found: kiro-cli'); };
+  assert.equal(provisionMcp({ scope: 'workspace', env: { JFROG_PLATFORM_URL: 'my.jfrog.io' }, exec }), 'unavailable');
+});
+
+test('provisionMcp expands a leading ~ in KIRO_HOME before passing to kiro-cli', () => {
+  const envsSeen = [];
+  const exec = (cmd, args, opts) => { envsSeen.push(opts?.env?.KIRO_HOME); return ''; };
+  provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'my.jfrog.io', KIRO_HOME: '~/.kiro-cli' }, exec });
+  assert.ok(envsSeen[0] && !envsSeen[0].startsWith('~'));
+});
+
+// resolvePlatformUrl is the single source of truth for turning JFROG_PLATFORM_URL into an mcp url —
+// provisionMcp uses it to build the --url argument AND to render the "added" log line, so the two
+// can no longer disagree the way the old duplicated regexes did.
+test('resolvePlatformUrl keeps an explicit http scheme, strips a case-insensitive https scheme and all trailing slashes', () => {
+  assert.equal(resolvePlatformUrl('my.jfrog.io'), 'https://my.jfrog.io/mcp');
+  assert.equal(resolvePlatformUrl('HTTPS://my.jfrog.io///'), 'https://my.jfrog.io/mcp');
+  assert.equal(
+    resolvePlatformUrl('http://my.jfrog.io'),
+    'http://my.jfrog.io/mcp',
+    'an http-only platform must not be upgraded to https'
+  );
+});
+
+// A `shell: true` execFileSync on Windows joins argv into one unescaped command line, so a metacharacter
+// in JFROG_PLATFORM_URL (never validated elsewhere) would run as a command. Userinfo would also leak
+// into the process argv and the printed log line. Reject all of it before a url is ever built.
+test('resolvePlatformUrl rejects an empty host, embedded userinfo, and shell metacharacters', () => {
+  assert.equal(resolvePlatformUrl('https://'), null, 'https:// alone leaves an empty host');
+  assert.equal(resolvePlatformUrl('/'), null);
+  assert.equal(resolvePlatformUrl('http://user:pass@my.jfrog.io'), null, 'userinfo must not reach the command line');
+  assert.equal(
+    resolvePlatformUrl('my.jfrog.io & rm -rf /'),
+    null,
+    'a shell metacharacter must be rejected before shell:true on Windows sees it'
+  );
+});
+
+test('provisionMcp reports "invalid-platform-url" instead of registering a broken entry', () => {
+  const calls = [];
+  const exec = (cmd, args) => { calls.push([cmd, args]); return ''; };
+  const result = provisionMcp({ scope: 'global', env: { JFROG_PLATFORM_URL: 'https:///' }, exec });
+  assert.equal(result, 'invalid-platform-url');
+  assert.equal(calls.length, 1, 'only the --version probe runs; kiro-cli mcp add must never see a broken url');
+});
+
+// bootstrap-cli.sh has its own, separately-written copy of this same host-cleaning logic (it can't
+// import resolvePlatformUrl — it's a shell script), and the two already diverged once on the skip
+// message (commit 716b795). Run the real script against a fake kiro-cli on PATH and assert its
+// --url argument matches resolvePlatformUrl's rules exactly, so a future edit to either side that
+// breaks parity fails this test instead of shipping two installers that write different urls.
+function withFakeKiroCli(fn) {
+  const bin = mkdtempSync(join(tmpdir(), 'fake-kiro-cli-'));
+  const script = join(bin, 'kiro-cli');
+  writeFileSync(
+    script,
+    '#!/usr/bin/env bash\ncase "$1" in\n  --version) exit 0 ;;\n' +
+      '  mcp) if [ "$2" = "add" ]; then echo "MCP_ADD $*"; exit 0; fi ;;\nesac\nexit 1\n'
+  );
+  chmodSync(script, 0o755);
+  return fn(bin);
+}
+
+function runBootstrap(extraEnv, bin) {
+  const cwd = mkdtempSync(join(tmpdir(), 'bootstrap-cwd-'));
+  return execFileSync('bash', ['-c', `bash ${join(repoRoot, 'scripts', 'bootstrap-cli.sh')} --workspace 2>&1`], {
+    cwd,
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, KIRO_POWER_SRC: repoRoot, ...extraEnv },
+    encoding: 'utf8',
+  });
+}
+
+test('bootstrap-cli.sh resolves JFROG_PLATFORM_URL with the same rules as install-cli.mjs\'s resolvePlatformUrl', () => {
+  withFakeKiroCli((bin) => {
+    const upper = runBootstrap({ JFROG_PLATFORM_URL: 'HTTPS://my.jfrog.io/' }, bin);
+    assert.match(upper, /mcp\s+jfrog -> https:\/\/my\.jfrog\.io\/mcp \(OAuth, workspace scope\)/);
+
+    const httpOnly = runBootstrap({ JFROG_PLATFORM_URL: 'http://my.jfrog.io' }, bin);
+    assert.match(
+      httpOnly,
+      /mcp\s+jfrog -> http:\/\/my\.jfrog\.io\/mcp \(OAuth, workspace scope\)/,
+      'an explicit http scheme must be preserved, not upgraded to https'
+    );
+
+    const withUserinfo = runBootstrap({ JFROG_PLATFORM_URL: 'http://user:pass@my.jfrog.io' }, bin);
+    assert.doesNotMatch(withUserinfo, /jfrog -> /, 'a host with embedded userinfo must be rejected, not passed to kiro-cli');
+    assert.match(withUserinfo, /not a valid host/);
+
+    const emptyHost = runBootstrap({ JFROG_PLATFORM_URL: 'https://' }, bin);
+    assert.doesNotMatch(emptyHost, /jfrog -> /, 'an empty host must be rejected');
+  });
 });
 
 // gen-steering must render Power-safe steering: on-disk `references/<x>.md` and `scripts/*` pointers
