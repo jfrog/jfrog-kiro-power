@@ -92,7 +92,7 @@ The JFrog steering ships with the power and loads automatically — nothing else
 it.
 
 > **Smoothest activation:** install from **GitHub** rather than a local folder. Kiro copies the power's
-> `POWER.md` + `mcp.json` + `steering/` into `~/.kiro/powers/installed/jfrog/`, so the agent reliably
+> `POWER.md` + `mcp.json` + `steering/` into `~/.kiro/powers/installed/jfrog-kiro-power/`, so the agent reliably
 > activates it.
 > A local **folder** import is referenced in place and may not populate `installed/`, which can prevent
 > activation — see [Troubleshooting Installation](POWER.md#troubleshooting-installation) in POWER.md.
@@ -235,7 +235,7 @@ Kiro can add this power two ways, and they behave differently — this matters w
 
 | | **Local folder import** (Add Custom Power → *Import from a folder*) | **GitHub install** (Import from GitHub) |
 |---|---|---|
-| Where files live | referenced **in place** from your repo path | **copied** into `~/.kiro/powers/installed/jfrog/` |
+| Where files live | referenced **in place** from your repo path | **copied** into `~/.kiro/powers/installed/jfrog-kiro-power/` |
 | `~/.kiro/powers/installed/` populated? | ❌ no | ✅ yes |
 | `kiro_powers` activation tool | ❌ fails ("Power not installed") | ✅ works |
 | Best for | **fast local iteration** on `POWER.md` / `steering/` | **production-style testing** and real users |

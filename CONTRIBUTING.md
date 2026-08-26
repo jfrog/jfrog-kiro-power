@@ -42,7 +42,7 @@ Kiro adds a power in two ways, and they are not equivalent:
   `kiro_powers` activation tool fails with "Power not installed" — this is **expected** for local imports,
   not a bug. Use this mode for **fast iteration**.
 - **GitHub install** (Import from GitHub): Kiro **copies** `POWER.md` + `steering/` into
-  `~/.kiro/powers/installed/jfrog/`, and activation works. Use this for **production-style testing**.
+  `~/.kiro/powers/installed/jfrog-kiro-power/`, and activation works. Use this for **production-style testing**.
 
 ### Iterating on steering without a full install
 
@@ -56,9 +56,9 @@ Optional local dev workaround to make `kiro_powers` activation work without GitH
 dir to mirror a GitHub install:
 
 ```bash
-mkdir -p ~/.kiro/powers/installed/jfrog
-cp POWER.md ~/.kiro/powers/installed/jfrog/
-rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
+mkdir -p ~/.kiro/powers/installed/jfrog-kiro-power
+cp POWER.md ~/.kiro/powers/installed/jfrog-kiro-power/
+rm -rf ~/.kiro/powers/installed/jfrog-kiro-power/steering && cp -R steering ~/.kiro/powers/installed/jfrog-kiro-power/
 # then fully quit & reopen Kiro
 ```
 
