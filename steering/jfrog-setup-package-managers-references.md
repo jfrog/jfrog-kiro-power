@@ -41,6 +41,7 @@ pruning, the file cannot.
         "npm":   "npm-virtual",
         "pypi":  "pypi-virtual",
         "maven": "libs-release",
+        "gradle":"gradle-virtual",
         "go":    "go-virtual",
         "docker":"docker-virtual",
         "helm":  "helm-virtual",
@@ -63,20 +64,22 @@ only `repositories`. The map key **is** the `serverId`.
 | Field | Meaning |
 |---|---|
 | `schemaVersion` | Always `1` for this schema. |
-| `servers.<serverId>.repositories.<pkgType>` | Resolver's chosen repo key for this package type, on this server. **Missing key = `unresolved`** for that PM. |
+| `servers.<serverId>.repositories.<pkgType>` | Resolver's chosen repo key for this package type, on this server. **Missing key = `unresolved`** for that package manager. |
 | `servers.<serverId>.cached_at` | ISO-8601 timestamp of the last refresh. TTL from `packageResolution.cacheTtlDays` in agents-conf.json (default 7). |
 | `servers.<serverId>.agentsConfigMtimeMs` | Invalidates cache when `~/.jfrog/agents-conf.json` changes. |
 | `servers.<serverId>.source` | `verified` = keys from agents-conf.json checked via `GET /api/repositories/{key}`; `agents-config` = trusted without HTTP (`verifyRepos: false`). |
 
-Package type keys used in the file are `npm`, `pypi`, `maven`, `go`,
+Package type keys used in the file are `npm`, `pypi`, `maven`, `gradle`, `go`,
 `docker`, `helm`, `nuget`. Note `pypi` (not `pip`) — same convention the
-JFrog API uses. The PM names accepted by `jf setup` (`pip`, `poetry`,
-`gradle`, `pnpm`, `yarn`, `podman`, `dotnet`, `pipenv`, `twine`) collapse
-onto these package-type keys.
+JFrog API uses. The package-manager names accepted by `jf setup` (`pip`, `uv`,
+`pnpm`, `podman`, `dotnet`, `pipenv`, `twine`, and optionally `yarn` / `poetry`
+when the user asks) collapse onto these package-type keys — **`gradle` maps to
+`gradle`**, not `maven`.
 
-## Three result classes per PM
 
-When you look up a PM in this file, you get one of:
+## Three result classes per package manager
+
+When you look up a package manager in this file, you get one of:
 
 | Class | Detect | What the resolver did | HTTP-verified? |
 |---|---|---|---|
@@ -110,7 +113,7 @@ If `$CACHE` does not exist, or the SID branch is missing, the hook has
 not yet resolved on this machine for this server — fall back to reading
 the injected "Resolved URLs for this session" table in agent context
 (parse the URL to recover `repoKey`), and if that is also absent, treat
-every PM as `unresolved` and prompt the user (Step 2).
+every package manager as `unresolved` and prompt the user (Step 2).
 
 The resolver refreshes stale entries on session start (TTL + agents-conf.json mtime).
 This skill never invalidates the cache — if `jf setup` fails on a repo key, ask the user.
@@ -128,13 +131,13 @@ These belong elsewhere and the skill must not look for them here:
 
 # `jf setup` Command Reference
 
-Configures a local PM to resolve from / publish to Artifactory. CLI install
-and server config: the `#jfrog` steering.
+Configures a local package manager to resolve from / publish to Artifactory. CLI
+install and server config: the `#jfrog` steering.
 
 ## Invocation
 
 ```bash
-jf setup <pm> --server-id <SID> --repo <repo-key> [--project <project-key>]
+jf setup <package-manager> --server-id <SID> --repo <repo-key> [--project <project-key>]
 ```
 
 Always pass `--server-id` and `--repo`. Without `--repo`, multiple matching
@@ -145,7 +148,7 @@ name using '--repo' flag`).
 `GET /artifactory/api/repositories/<key>` before configuring. Record
 `repositories.docker` in the workspace marker for pull URL composition.
 
-## Supported PM list
+## Supported package-manager list
 
 Drifts across CLI versions — always parse from the installed binary:
 
@@ -165,11 +168,34 @@ Look for the "Supported package managers are:" line. Never hardcode.
 | `401` / `403` | Token issue | Re-login same server — [`jfrog-login-flow.md`](the `jfrog-login-flow` section of the `#jfrog-references` steering) |
 | Wrong server `404` | Bad `<SID>` | Stop — never iterate servers |
 
-Do not continue to the next PM after a failure.
+Do not continue to the next package manager after a failure.
 
 ## Agent notes
 
-- `pyproject.toml` with `[tool.poetry]` → `poetry`; plain PEP 621 → `pip`.
+### Python / Node detection (composition)
+
+- `uv.lock` → `uv` (writes `uv.toml`, not `pip.conf`). Takes precedence over a
+  bare `pyproject.toml` pip fallback — common layout is `uv.lock` + PEP 621
+  **without** `[tool.uv]`; select `uv` only, never also `pip`.
+- `requirements.txt` + `uv.lock` → bind **both** `pip` and `uv` (independent
+  manifests). Missing `uv` binary → skip `uv` as not applicable; do **not**
+  substitute `pip` for the uv candidate (pip still binds from its own file).
+- `pyproject.toml`:
+  1. `[tool.uv]` → `uv`
+  2. `[tool.poetry]` → `poetry` **only** on explicit user ask; otherwise **not
+     applicable** (do not fall through to `pip`)
+  3. Bare PEP 621 with **neither** uv signal and **no** `uv.lock` → `pip`
+- Prefer `npm` / `pnpm` for Node; `yarn.lock` alone → `npm`. Do not proactively
+  run `jf setup yarn` / `jf setup poetry` (APR zero-touch omits both).
+
+### Binary gate / types
+
+- Missing package-manager binary → skip that candidate; do not substitute another.
+  Exception: `maven` / `gradle` need no client binary (`jf setup` writes config
+  only; wrappers/`pom.xml`/Gradle files are enough). Bind `gradle` under the
+  **`gradle`** package type (not `maven`).
+- Browse repos with Artifactory `packageType` from the binding map (`uv` →
+  `pypi`, not `uv`).
 - `jf setup --help` is the authoritative flag reference.
 
 
@@ -181,7 +207,7 @@ This skill records workspace repo bindings in a file the session-start hook
 reads to override org defaults from `~/.jfrog/skills-cache/package-resolution.json`.
 
 The file is the **decisions** record, not a credential store. Tokens live
-in `jf config` and in PM-native files written by `jf setup` itself.
+in `jf config` and in package-manager-native files written by `jf setup` itself.
 
 ## Location
 
@@ -201,6 +227,7 @@ different Artifactory repos.
     "npm": "<repository-key>",
     "pypi": "<repository-key>",
     "maven": "<repository-key>",
+    "gradle": "<repository-key>",
     "go": "<repository-key>",
     "docker": "<repository-key>",
     "helm": "<repository-key>",
@@ -213,13 +240,19 @@ different Artifactory repos.
 |---|---|---|
 | `repositories` | yes | Map keyed by **package type** — same keys as `servers.<serverId>.repositories` in the global resolver cache. Omit package types you do not override. |
 
-### PM name → package type (when merging after `jf setup`)
+### Package-manager name → package type (when merging after `jf setup`)
 
-| `jf setup` PM | `repositories` key |
+Aligned with Agent Package Resolution (`PACKAGE_TYPES` / eager families).
+`gradle` is its **own** Artifactory package type — never fold it under `maven`.
+
+| `jf setup` package manager | `repositories` key |
 |---|---|
-| `npm`, `yarn`, `pnpm` | `npm` |
-| `pip`, `pipenv`, `poetry`, `twine` | `pypi` |
-| `maven`, `gradle` | `maven` |
+| `npm`, `pnpm` | `npm` |
+| `yarn` | `npm` (CLI may still accept `jf setup yarn`; APR zero-touch does **not** auto-setup yarn — only bind on explicit user request) |
+| `pip`, `pipenv`, `uv`, `twine` | `pypi` |
+| `poetry` | `pypi` (CLI may accept it; APR zero-touch does **not** auto-setup poetry — bind only on explicit user request) |
+| `maven` | `maven` |
+| `gradle` | `gradle` |
 | `go` | `go` |
 | `docker`, `podman` | `docker` |
 | `helm` | `helm` |
@@ -229,8 +262,8 @@ different Artifactory repos.
 
 ### 1. Load
 
-Before setup, **read** the file (if it exists). For each PM in the
-to-bind set, map the PM to a package type and compare
+Before setup, **read** the file (if it exists). For each package manager in the
+to-bind set, map it to a package type and compare
 `repositories.<type>` against what the resolver chose in Step 2:
 
 | Case | Action |
@@ -241,26 +274,38 @@ to-bind set, map the PM to a package type and compare
 
 ### 2. Write / merge
 
-After each successful `jf setup`:
+After each successful `jf setup`, run the skill script (do **not** hand-edit
+JSON):
 
-1. Read the current file (treat ENOENT as `{ "repositories": {} }`).
-2. Set `repositories[<pkgType>] = <repoKey>` using the PM → type table above.
-3. Atomically write `{ "repositories": { ... } }` — preserve other package
-   types already in the map.
+```bash
+bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/merge-workspace-binding.sh \
+  --package-manager <package-manager> \
+  --repo <repoKey> \
+  [--workspace-root <workspace-root>]
+```
 
-JSON must use 2-space indent.
+The script:
+
+1. Maps `--package-manager` → package type using the table above (unknown PM → exit 1).
+2. Validates `--repo` (`^[A-Za-z0-9._-]+$`).
+3. Reads the current file (ENOENT → empty `repositories`).
+4. Sets `repositories[<pkgType>] = <repoKey>`, preserve other package types, **last write wins** for the same type.
+5. Writes `{ "repositories": { ... } }` only (drops other top-level keys), 2-space indent, atomic replace via `mktemp` + `mv`.
+6. Serializes concurrent merges with a workspace **directory** lock (`package-resolution.lock.d`; symlink-safe; reclaim when owner PID is dead on this host or the owner hostname differs; owner-less lock dirs are **not** reclaimed — `mkdir` is the mutex; reclaimers take an exclusive side-gate so a late reclaim cannot delete a newly acquired lock).
+7. On corrupt/invalid existing JSON → exit 1 and **leaves the file untouched**.
+8. Requires `jq`; if missing → exit 1.
 
 ### 3. Never write
 
 - Credentials (`accessToken`, passwords, …).
-- PM-native config paths — those are owned by `jf setup`.
+- Package-manager-native config paths — those are owned by `jf setup`.
 
 ## Integration contract
 
 | Consumer | What it reads |
 |---|---|
 | Session-start hook | `repositories` — first workspace root with this file (multi-root) |
-| This skill | Round-trip load → diff → confirm → write |
+| This skill | Round-trip load → diff → confirm → `merge-workspace-binding.sh` |
 | `opencode-jfrog-plugin` | **Not updated** — out of scope until it reads this file |
 
 Changing the `repositories` key semantics is a breaking change; coordinate

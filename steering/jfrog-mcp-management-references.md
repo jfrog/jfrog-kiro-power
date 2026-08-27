@@ -77,7 +77,24 @@ Wherever `<REGISTRY_URL>` appears, substitute the value of the
 `JFROG_AGENT_GUARD_REPO` environment variable if it is set. Otherwise use
 `https://releases.jfrog.io/artifactory/api/npm/coding-agents-npm/`.
 
+`@jfrog/agent-guard` is not published to the public npm registry; resolve it
+with `--registry <REGISTRY_URL>` above rather than the default npm registry.
+
 ## Pre-flight (applies to every agent guard command — `--list-available`, `--inspect`, `--login`)
+
+**Environment probe (run once before resolving the project key and server).**
+Before resolving credentials and the JFrog project key, run the skill’s env
+probe so each var is printed on its own line (chained `printenv` or truncating
+with `head` can merge lines and confuse the read). Prefer this over inventing
+an env check; do not print raw token values — report tokens as `present` only;
+prefer reporting `JFROG_URL` / `JF_URL` as `present` only as well; an empty
+value after the label means the variable is unset. Print real values for
+`JF_PROJECT` and `JFROG_AGENT_GUARD_REPO` (needed for `--project` and
+enforceable MCP entries):
+
+```bash
+node "~/.kiro/jfrog-scripts/jfrog-mcp-management/jfrog-agent-guard-env-probe.mjs"
+```
 
 - **Live execution is MANDATORY — context reuse is FORBIDDEN.** Every time the
   user asks to list / show / inspect / check the catalog or a specific MCP —
@@ -212,6 +229,235 @@ a JSON parse failure (undefined `${VAR}`) or an `allowedMcpServers` /
 `deniedMcpServers` policy in `managed-settings.json`.
 
 
+## harness-codex
+
+# Harness: OpenAI Codex
+
+Codex-specific config for the `jfrog-mcp-management` skill. Read this together
+with harness-common.md (shared entry shape and success
+criterion). You reached this file because the harness is Codex (`CODEX_SANDBOX`
+/ `CODEX_THREAD_ID` / `CODEX_CI`). This targets the Codex CLI / IDE extension,
+which all share the same `config.toml`.
+
+> **Codex differs from the JSON harnesses:** the config is **TOML** - one
+> `[mcp_servers.<name>]` table per server, with the server **`<name>` matching
+> `^[a-zA-Z0-9_-]+$`** (derive a slug from `spec.packageName`, see Top-level
+> key). Transport is implicit - a `command` key means stdio (omit `type`). The
+> default scope is **user-level** (project scope loads only from a *trusted*
+> directory). Secrets and env references use an **`env_vars` allow-list** that
+> forwards named variables from the launching shell. Write the entry using the
+> TOML template in **Full entry shape** below.
+
+## Config files
+
+- **Default scope: user-level.** `~/.codex/config.toml` (or
+  `$CODEX_HOME/config.toml` if `CODEX_HOME` is set; on Windows `~` is
+  `%USERPROFILE%`, i.e. `%USERPROFILE%\.codex\config.toml`) - personal, not committed,
+  applies to every project. Create if missing. Servers live under the
+  `[mcp_servers.<name>]` table (top-level key `mcp_servers`).
+- **Project:** `.codex/config.toml` in the project root - shareable via git, but
+  Codex loads it ONLY when the project is **trusted** (accepted the trust prompt,
+  or `projects."<abs-path>".trust_level = "trusted"` in `~/.codex/config.toml`).
+  Use ONLY if the user says "for this project" / "commit" / "share with the
+  team", and tell them it takes effect only once the directory is trusted.
+- **Write to exactly one scope, never both.** User config wins where the two
+  overlap. Do not ask which scope unless the user brings it up.
+
+## Top-level key
+
+Use `mcp_servers` - one TOML table per server: `[mcp_servers.<server-name>]`.
+
+**The `<server-name>` MUST match `^[a-zA-Z0-9_-]+$`.** Codex rejects any other
+name at startup ("Invalid MCP server name"), so when `spec.packageName` contains
+characters like `.` `/` `@`, derive a **slug** for the table key: lowercase
+`spec.packageName`, replace each run of characters outside `[a-z0-9_-]` with a
+single `-`, and trim leading/trailing `-`. Examples:
+
+1. `org.example/tool` → `org-example-tool`
+2. `@scope/pkg` → `scope-pkg`
+
+**Before writing, check for an existing `[mcp_servers.<slug>]` table with that
+key.** Re-declaring a TOML key silently overwrites the earlier table (or errors on
+strict parsers), and an unrelated server (another Agent Guard package, or a plain
+MCP entry with no `_JF_ARGS` at all) may already own that key. Treat the key as
+**yours only if its `_JF_ARGS` has `mcp=<spec.packageName>` matching exactly** -
+then you are updating that entry. Otherwise, the key is occupied: append a numeric
+suffix (`-2`, then `-3`, …) and keep probing until you find a free key (or one
+that is already your exact package).
+
+The slug is only a local label - **the authoritative package identity stays in
+`_JF_ARGS` (`mcp=<spec.packageName>`)**, which is what the List and Remove flows
+match on. Keep `mcp=` set to the exact catalog `spec.packageName`, never the slug.
+
+## Value reference (env / secrets)
+
+In Codex, values come from two `env` mechanisms:
+
+- **`env` table** - inline literal values only. Use it for the non-secret
+  `_JF_ARGS` string, and for any non-secret you choose to write literally.
+- **`env_vars` array** - an allow-list of variable NAMES that Codex forwards
+  from the shell that launched it into the server process. Use this for every
+  value that must stay OUT of the file: **all secrets**, and any non-secret you
+  prefer to keep as a reference. The user exports the variable in the launching
+  shell (see persisting-env-vars.md); Codex forwards it
+  on next launch. If a required forwarded variable is unset, the Agent Guard
+  fails at startup - confirm the export before restart. **Never write a raw
+  secret into `env`.**
+
+**Names are case-sensitive - copy the catalog input's `name` verbatim.** Every
+`env_vars` entry, and every `env` key that carries a **catalog input** value,
+MUST equal that input's `name` (from `--inspect`) character-for-character,
+including case. (This does NOT apply to `_JF_ARGS` - it is a fixed Agent Guard
+key, not a catalog input.) The Agent Guard matches the forwarded variable to the
+upstream env var / header name exactly, so an uppercased or renamed variable is
+silently dropped and the MCP starts with the value missing. e.g. mcp header input
+is named `Authorization` → use `Authorization` (NOT `AUTHORIZATION`) in `env_vars`
+and in the user's `export`.
+
+For a `Bearer` header the catalog exposes as a header input, forward it the same
+way: have the user export the FULL header value under that exact name - e.g.
+`export Authorization="Bearer <token>"` - and list `Authorization` (verbatim
+case) in `env_vars`. The prefix and secret both stay out of the file.
+
+Full entry shape - write the whole server as a **single `[mcp_servers.<slug>]`
+table** with an inline `env = { … }` (do NOT split `env` into a separate
+`[mcp_servers.<slug>.env]` sub-table). `_JF_ARGS` is a literal in `env`;
+secrets/refs go through `env_vars`:
+
+```toml
+[mcp_servers.<server-name-slug>]
+command = "npx"
+args = ["--yes", "--registry", "<REGISTRY_URL>", "@jfrog/agent-guard", "--server", "<SERVER_ID>"]
+env = { _JF_ARGS = "project=<JFROG_PROJECT_KEY>&mcp=<spec.packageName>", "<NON_SECRET_LITERAL_NAME>" = "<literal value>" }
+env_vars = ["<SECRET_OR_REFERENCED_ENV_NAME>"]
+```
+
+- `<server-name-slug>` is the sanitized slug from **Top-level key** (matches
+  `^[a-zA-Z0-9_-]+$`, needs no quoting); `mcp=` in `_JF_ARGS` keeps the exact
+  `spec.packageName`.
+- **Include `--server <SERVER_ID>`** to authenticate JFrog on Codex - it is the
+  default, and required when the user has multiple `jf` servers. It also keeps the
+  entry working if the user later adds more servers. (It can be omitted only when a
+  single `jf` server is configured, which the Agent Guard auto-resolves; see JFrog
+  credentials below.) `env_vars` here is only for the upstream MCP's own
+  secrets/inputs, never for JFrog credentials.
+- Omit `env_vars` if there are no forwarded values; omit the extra `env` key if
+  `_JF_ARGS` is the only literal. Never emit an empty `--server`.
+- **Always write the entry as one section** with the inline `env = { … }` above -
+  hand-write it, do NOT run `codex mcp add`. That command splits `env` into a
+  separate `[mcp_servers.<slug>.env]` sub-table and cannot express `env_vars`.
+
+## JFrog credentials - from the `jf` config
+
+Codex does NOT forward ambient shell variables, so the Agent Guard reads its JFrog
+credentials from the on-disk `jf` CLI config (which the Codex-launched process can
+read).
+
+**Include `--server <SERVER_ID>` in `args` by default.** It reads that server's
+URL + token from the `jf` config, is unambiguous, and keeps working if the user
+later adds more servers. Resolve `<SERVER_ID>` per the agent-guard-common
+Pre-flight rules.
+
+`--server` can be **omitted only when exactly one `jf` server is configured** - in
+that case the Agent Guard auto-resolves it. With **multiple** `jf` servers,
+omitting `--server` fails: the Agent Guard cannot choose between them and does NOT
+fall back to the `jf` default, so `--server` is required. (When in doubt, include
+it.)
+
+**Codex exception to the shared rule.** [SKILL.md](../SKILL.md) treats `--server`
+as conditional and permits dropping it on the `JFROG_URL`+token env path (see its
+Step 4 Guardrails, "`--server` … drop it only on the `JFROG_URL`+token env
+path"). **That env path does NOT apply on Codex** - Codex does not forward ambient
+shell env to the server, so `JFROG_URL` / `JFROG_ACCESS_TOKEN` never reach the
+Agent Guard. On Codex, therefore, do NOT authenticate JFrog via env-var
+credentials; use `--server <SERVER_ID>` (or a single configured `jf` server) as
+described above. If there is no usable `jf` server, ask the user to add one
+(`jf c add <ID>`, or `jf login`) before continuing.
+
+If credentials cannot be resolved (no `--server` and either zero or multiple `jf`
+servers), the entry fails to start with `connection closed: initialize response`.
+
+## Step 0 activation check under Codex's sandbox
+
+Codex runs shell commands in a sandbox with **no outbound network by default**,
+and the skill's Step 0 check (`~/.kiro/jfrog-scripts/jfrog-mcp-management/jfrog-agent-guard-check.mjs`) probes the
+JFrog settings endpoint over the network. So the first run can report `Disabled:
+settings endpoint unreachable (fetch failed)` even when the `jf` credentials are
+valid - that is the sandbox blocking the request, NOT a missing or unreachable
+server. On Codex, treat a first-run `unreachable (fetch failed)` as
+**inconclusive, not a Disabled result** - do NOT apply the Step 0 "silently
+abort" handling from
+agent-guard-activation.md yet. First re-run the SAME
+check with network access (approve the escalated command, or run it outside the
+sandbox); only treat the platform as unreachable if it STILL fails with network.
+A follow-up `Enabled: via JF CLI config (server '<id>')` confirms it was only the
+sandbox. Credentials resolve from the on-disk `jf` config regardless - only the
+reachability probe needs network.
+
+## Enable
+
+Codex servers are enabled by default (`enabled = true` is implicit) - there is no
+per-server approval file to pre-write. Just make sure the entry is NOT
+`enabled = false`. For a **project-scoped** entry, the directory must be trusted
+or Codex ignores `.codex/config.toml` entirely. **Trust is the user's decision -
+do NOT write `trust_level` yourself to self-approve a directory.** Ask the user to
+accept Codex's trust prompt (or, only if they explicitly ask, they can set
+`projects."<abs-path>".trust_level = "trusted"` in `~/.codex/config.toml`).
+
+## Restart
+
+Codex reads `config.toml` at startup and does not hot-reload it, and the agent
+cannot restart Codex itself - **tell the user to start a new Codex session** (exit
+and relaunch `codex`, or open a new session in the IDE extension) so the
+added/removed entry and any newly exported `env_vars` take effect.
+
+## List installed
+
+`codex mcp list` for the configured servers with their auth status (one row per
+server); `codex mcp get <server-name-slug>` prints one server's resolved config.
+For JFrog metadata, read the `[mcp_servers.*]` tables from `~/.codex/config.toml`
+(user) and, if trusted, the project `.codex/config.toml`. Identify the package by
+the `mcp=` value in each entry's `_JF_ARGS` (the table key is only a slug), and
+show it as the display name. When reading an entry for metadata, use ONLY the
+table key/slug, the `_JF_ARGS` values (`mcp=` / `project=`), and the `env_vars`
+**names** - do NOT read, log, or display the `env` table's values (a user may have
+placed a secret there despite the guidance above). An entry that does not appear
+in `codex mcp list` is usually a TOML syntax error, an invalid server name (must
+match `^[a-zA-Z0-9_-]+$`), or an untrusted project config.
+
+## Verify
+
+Run `/mcp` in the Codex TUI (or check the IDE extension's MCP view) and confirm
+the server exposes the upstream MCP's **real tools**. `codex mcp list` shows the
+server and its auth status but is NOT proof of working tools - the Agent Guard
+proxy can report up with 0 upstream tools.
+
+Codex-specific signals to read correctly:
+- **`Auth: Unsupported` is normal** for static-header and local MCPs - it
+  describes Codex's own OAuth support, not the upstream MCP. Judge by the tool
+  list.
+- **An `enable_<slug>_tools` tool is a normal Agent Guard gate**, not an error:
+  for MCPs that need sign-in or explicit enablement, the Agent Guard first
+  exposes this single tool; invoking it (e.g. "sign in to `<MCP>`") runs the flow
+  and the upstream MCP's real tools then appear. Re-check `/mcp` afterward.
+- If the **real tools never appear** (even after enabling / signing in), a
+  required input likely did not reach the server - most often an `env_vars` name
+  or shell export whose case does not match the catalog input `name` (see Value
+  reference), or a variable that was not exported in the launching shell. Fix it
+  and start a new session. A truly empty tool list = Failed → see the "0 tools"
+  troubleshooting in
+  key-rules-and-troubleshooting.md.
+
+## Remove
+
+Find the target entry by matching `mcp=<spec.packageName>` in `_JF_ARGS`, then
+`codex mcp remove <server-name-slug>` (using that entry's table key), or delete
+the whole `[mcp_servers.<server-name-slug>]` table by hand. Check BOTH scopes
+(user `~/.codex/config.toml` and, if present, project `.codex/config.toml`) per
+the SKILL.md Remove flow. There is no top-level `inputs`-style array to clean up.
+Then start a new Codex session so the removed server stops loading.
+
+
 ## harness-common
 
 # Harness config — common + routing
@@ -226,24 +472,36 @@ plus **exactly one** harness file; do NOT open the others.
 
 ## Step A — detect the harness and open ONE file
 
-Detect from the environment (the `CLAUDECODE`/`CURSOR_*` signals below mirror
-`~/.kiro/jfrog-scripts/jfrog/check-environment.sh` `detect_harness()`; the
-`TERM_PROGRAM=vscode` editor hint is not in that script), then read only the
-matching harness file. **Evaluate the rows top-to-bottom and take the FIRST
-match** — order matters: Cursor is a VS Code fork and also sets
-`TERM_PROGRAM=vscode`, so the Cursor row (checked first, on `CURSOR_*`) must win
-before the VS Code `TERM_PROGRAM` row is considered. The VS Code harness file
-targets the **VS Code editor** (Copilot MCP support), not the standalone GitHub
-Copilot terminal CLI — the CLI (`COPILOT_CLI`) has no editor UI or `mcp.json`,
-so it falls through to the Fallback section. If detection is not conclusive, ASK
-the user which agent/editor they are in — do not guess, and do not read multiple
-harness files.
+The `CLAUDECODE` / `CURSOR_*` / `CODEX_*` / `OPENCODE` signals below
+mirror `~/.kiro/jfrog-scripts/jfrog/check-environment.sh` `detect_harness()`; the
+`TERM_PROGRAM=vscode` editor hint is **not** in that script, and Devin is
+**not** detected by the script. Each row's signal is **self-contained and
+non-overlapping**, so detection does not depend on evaluation order. The VS
+Code harness file targets the **VS Code editor** (Copilot MCP support), not
+the standalone GitHub Copilot terminal CLI — the CLI (`COPILOT_CLI`) has no
+editor UI or `mcp.json`, so it falls through to the Fallback section.
 
-| Detected harness | Env signals | Read THIS file (and no other harness file) |
+1. Call `~/.kiro/jfrog-scripts/jfrog/check-environment.sh` and parse `tool=<name>` from
+   the User-Agent line. When `tool` is `claude` or `cursor`, that matches the
+   Claude or Cursor row below — open that harness file. This call also
+   satisfies the Prerequisites environment check — capture/export
+   `JFROG_CLI_USER_AGENT` from it here too, rather than calling the script
+   again later.
+2. Otherwise other `tool` values, `unknown`, or a missing `tool` are not enough
+   — **match this table**. Use how your system prompt identifies you plus any
+   environment variables that matching row lists. If row matches → open that file.
+   Unsure → step 3. Sure none apply → Fallback.
+3. If detection is still not conclusive, ASK the user which agent/editor they
+   are in — do not guess, and do not read multiple harness files.
+
+| Detected harness | Signal (self-contained) | Read THIS file (and no other harness file) |
 | --- | --- | --- |
-| Claude Code | `CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT` | harness-claude.md |
-| Cursor | `CURSOR_AGENT` / `CURSOR_CLI` / `CURSOR_TRACE_ID` | harness-cursor.md |
-| VS Code editor | editor is VS Code (`TERM_PROGRAM=vscode`) **and no `CURSOR_*` var is set** | harness-vscode.md |
+| Claude Code | `CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT` env var | harness-claude.md |
+| Codex | `CODEX_SANDBOX` / `CODEX_THREAD_ID` / `CODEX_CI` | harness-codex.md |
+| Cursor | `CURSOR_AGENT` / `CURSOR_CLI` / `CURSOR_TRACE_ID` env var | harness-cursor.md |
+| OpenCode | `OPENCODE` | harness-opencode.md |
+| Devin | Your system prompt / system instructions identify you as **Devin** (Devin Desktop / Devin Local / Devin CLI / Cognition). | harness-devin.md |
+| VS Code editor | `TERM_PROGRAM=vscode` **and no `CURSOR_*` var is set** **and no `OPENCODE` var is set** **and no `CODEX_*` var is set** **and no `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT` var is set** **and no `GEMINI_CLI` / `GOOSE_TERMINAL` / `COPILOT_CLI` var is set** **and** your system prompt / system instructions do **not** identify you as Devin | harness-vscode.md |
 | anything else | none of the above | **Fallback** section below — no harness file exists |
 
 Once you know your harness, use ONLY these fields from its file: `Config files`
@@ -255,10 +513,14 @@ harness-config" means: use the value from your one harness file.
 
 These do not vary; the harness file only overrides the pieces above.
 
-**The Agent Guard entry** is always a stdio server invoking
-`npx @jfrog/agent-guard`. `command`, `args` (and their order), and `_JF_ARGS`
-are the same everywhere — only the wrapping top-level key and the value-reference
-syntax come from your harness file.
+**The Agent Guard entry** always invokes `npx @jfrog/agent-guard` with the same
+argument tokens (in the same order) and the same `_JF_ARGS`. What varies per
+harness is **how the entry is written** — the wrapping top-level key, the
+value-reference syntax, and the entry *shape* itself (the transport field, and
+whether `command`/`args` are separate). The JSON template below is the common
+case; harnesses whose config is not JSON differ — e.g. **Codex** uses TOML with no
+`type`, and **OpenCode** merges `command`+`args` into a single `command` array — so
+**always follow your harness file's "Full entry shape" when it has one.**
 
 ```json
 {
@@ -386,6 +648,329 @@ troubleshooting in key-rules-and-troubleshooting.md.
 Cursor has no `enabledMcpjsonServers`-style precedence files — enable/disable is
 the UI toggle above. OAuth `--login` in a sandbox must run with `all`
 permissions (see runtime-permissions.md).
+
+
+## harness-devin
+
+# Harness: Devin
+
+Devin-specific config for the `jfrog-mcp-management` skill (Devin CLI and
+Devin Local in Devin Desktop). Read this together with
+harness-common.md (shared entry shape and success
+criterion). You reached this file because Step A matched **Devin**: your
+system prompt / system instructions identify you as Devin. The environment
+script does not detect Devin.
+
+This harness targets the **Devin plugin** path only.
+
+## Detect the Devin surface
+
+Run this from **your** agent environment (not a terminal the user typed into —
+the two can differ) before choosing restart or verify steps:
+
+```bash
+printf 'TERM_PROGRAM=%s\n' "${TERM_PROGRAM-<unset>}"
+printf 'VSCODE_IPC_HOOK=%s\n' "${VSCODE_IPC_HOOK-<unset>}"
+```
+
+Classify from the result. **Environment markers win over system-prompt
+wording**, because Devin Local's system prompt also describes an "interactive
+command line agent" and must NOT be treated as CLI:
+
+- **Devin Desktop (Devin Local):** `VSCODE_IPC_HOOK` is set to a path inside a
+  Devin user-data directory (contains `/Devin/` on macOS/Linux, `\Devin\` on
+  Windows). Optionally the system prompt identifies Devin Desktop /
+  Devin Local.
+- **Devin CLI:** no Devin Desktop marker above — `VSCODE_IPC_HOOK` unset (or
+  not under a Devin user-data dir). This holds even when the system prompt
+  calls you an "interactive command line agent".
+- If a Desktop marker is present, choose Desktop even if the prompt reads
+  CLI-like. If nothing is conclusive, ASK the user — do not guess.
+
+Use the matching Desktop or CLI instructions below for restart, list, and
+verify. **Config write path is the same for both** (see Config files). Do not
+mix restart or verification surfaces.
+
+## Config files
+
+Both Devin CLI and Devin Local use the same Devin MCP config files.
+
+- **Default scope: user-level.** Personal, not committed, available across all
+  workspaces:
+  - macOS/Linux: `~/.config/devin/mcp_config.json`
+  - Windows: `%APPDATA%\devin\mcp_config.json`
+
+  Create the parent directory first (`mkdir -p` / platform equivalent), then
+  create the file if missing: `{ "mcpServers": {} }`.
+- **Project scope** (only if the user asks): `.devin/mcp_config.json` in the
+  project root (shared / commit-able).
+- **Local project override** (only if the user asks): `.devin/mcp_config.local.json`
+  (gitignored; personal keys).
+- Do not ask which scope unless the user brings it up; use the user-level
+  default above.
+
+## Top-level key
+
+`mcpServers`
+
+## Value reference (env / secrets)
+
+`${env:VAR_NAME}`, resolved from the environment that launches the current
+surface (Devin Desktop or Devin CLI). For `Bearer` headers:
+`"Bearer ${env:TOKEN}"`. Also supports `${file:~/path/to/file}` to inline a
+file's trimmed contents. The user must export the variable in the launching
+environment (see persisting-env-vars.md); values are
+picked up on next launch / new session. If a required `${env:VAR}` is unset
+the upstream MCP may fail at startup — confirm the export before restart.
+Never write a raw secret.
+
+`${env:…}` / `${file:…}` are for the upstream MCP's own secrets and inputs —
+never for JFrog Agent Guard credentials (see below).
+
+## JFrog credentials - from the `jf` config
+
+On Devin (CLI and Desktop Local), authenticate Agent Guard only through the
+on-disk `jf` CLI config. **Always include `--server <SERVER_ID>`** in every
+Agent Guard command and written MCP config entry — resolve `<SERVER_ID>` per
+the agent-guard-common Pre-flight rules, never emit an empty `--server`, and do
+**not** omit `--server` even when only one `jf` server is configured (explicit
+server ID matches plugin enforcement).
+
+Do **not** use the shared [SKILL.md](../SKILL.md) env-var auth path
+(`JFROG_URL` / `JFROG_ACCESS_TOKEN`, or legacy `JF_URL` / `JF_ACCESS_TOKEN`) on
+Devin, even though Devin would resolve or forward them into Agent Guard. If
+there is no usable `jf` server, ask the user to add one (`jf c add <ID>`, or
+`jf login`) before continuing.
+
+If credentials cannot be resolved (no `--server <SERVER_ID>` in the entry, or no
+usable `jf` server to resolve one from), the entry fails to start and the server
+connects with no tools.
+
+## Enable
+
+Both surfaces start every server under `mcpServers` that is not marked
+`"disabled": true` on that server's own entry (per-server flag in the config —
+same idea as `devin mcp disable` / `enable`). If `<name>` has
+`"disabled": true`, remove that flag so the server can run. Approving MCP tool
+calls in chat is separate from enablement.
+
+## Restart
+
+- **Devin Desktop (Local):** tell the user to run `Developer: Reload Window` (or fully quit and
+  reopen Devin Desktop). Desktop re-reads MCP config on window / session load.
+- **Devin CLI:** tell the user to start a new Devin CLI session — exit and run
+  `devin` again in the same directory — so the added/removed entry takes
+  effect (user, project, and local MCP config files are read at session start).
+
+## List installed
+
+Read `mcpServers` from `~/.config/devin/mcp_config.json` (or the project/local
+file if that scope was used). Do not report secret values — env **key names**
+only.
+
+- **Devin CLI and Devin Desktop (Local):** run `devin mcp list` for
+  live connection status.
+- If the config and `devin mcp list` are not enough, tell the user to run
+  `/mcp` for the interactive status panel. On **Devin Desktop (Local)** only,
+  they can also open **Open customizations** (MCP list) and report each
+  server's status.
+
+## Verify
+
+Before treating a missing server as Failed, confirm the entry is in the active
+store for this harness (user `~/.config/devin/mcp_config.json` by default).
+
+After the user completes Restart (see Restart), run `devin mcp list` for connection status,
+then **list that server's live tools** through the connected MCP (Devin CLI and
+Devin Desktop Local).
+
+The server MUST expose **at least one tool**. A connected indicator alone is
+NOT proof — the Agent Guard proxy can report connected with 0 upstream tools.
+Empty tool list = Failed → see the "0 tools" troubleshooting in
+key-rules-and-troubleshooting.md.
+
+Do **not** treat a tool list scraped from npm / GitHub docs as verification —
+only a live tool list from the connected server counts.
+
+On first connect without cached OAuth, Devin opens a browser to sign in; later
+runs reuse stored credentials. Devin Local and Devin CLI may prompt to approve
+each MCP tool call by default — grant the prompt before treating an empty list
+as a failure.
+
+## Notes
+
+- Devin CLI and Devin Local share the same MCP config paths. An install from
+  either surface is visible to the other after the appropriate restart.
+- OAuth `--login` caches tokens in `~/.jfrog/jfrogmcp.conf.json` (same as all
+  harnesses); removal cleanup of that file is the same everywhere.
+
+
+## harness-opencode
+
+# Harness: OpenCode
+
+OpenCode-specific config for the `jfrog-mcp-management` skill. Read this together
+with harness-common.md (shared entry shape and success
+criterion). You reached this file because the harness is OpenCode (`OPENCODE`,
+set in the environment at startup). This targets all OpenCode surfaces (TUI, CLI,
+Desktop, IDE, web) - they share one backend and the same `opencode.json`.
+
+> **How OpenCode stores the entry:** config is **JSON / JSONC** under the
+> top-level **`mcp`** key; each server is a **`type: "local"`** entry whose
+> **`command` is a single ARRAY** (executable + args combined - there is NO
+> separate `args`); env vars go in an **`environment`** object; and value
+> references use **`{env:VAR}`** (or `{file:/path}`). Write the entry using the
+> JSON template in **Full entry shape** below.
+
+## Config files
+
+- **Default scope: user-level (global).** `~/.config/opencode/opencode.json`
+  (`.jsonc` also works) - personal, not committed, applies to every project.
+  Create if missing: `{ "mcp": {} }`. (`$OPENCODE_CONFIG`, if set, adds a custom
+  config file - merged after the global file and before project config - it does
+  NOT replace the global file; `$OPENCODE_CONFIG_DIR`, if set, adds a custom
+  config directory whose `opencode.json` / `.jsonc` is also loaded.)
+- **Project:** `opencode.json` (or `.jsonc`) in the project root - shareable via
+  git. Use ONLY if the user says "for this project" / "commit" / "share with the
+  team".
+- **Write to exactly one scope, never both.** Config files are merged; project
+  overrides global on conflicts. Do not ask which scope unless the user brings it
+  up.
+
+## Top-level key
+
+`mcp` - one entry per server: `mcp.<server-name>`. Use `spec.packageName`
+directly as the key; special characters (`.` `/` `@`) are fine because OpenCode
+sanitizes the name (`[^a-zA-Z0-9_-]` → `_`) when it exposes tools as
+`<sanitized-name>_<tool>`.
+
+## Value reference (env / secrets)
+
+`{env:VAR_NAME}` inside the `environment` object, substituted from OpenCode's
+environment when it loads `opencode.json` (use `{file:/path}` to read a value
+from a file instead). For `Bearer` headers: `"Bearer {env:TOKEN}"`. The user must
+export the variable in the shell that launched OpenCode (see
+persisting-env-vars.md); values are picked up on next
+launch. **Names are case-sensitive** - each `environment` key that carries a
+catalog input MUST equal that input's `name` (from `--inspect`)
+character-for-character, or the Agent Guard drops it and the MCP starts with the
+value missing. Never write a raw secret - always a `{env:...}` / `{file:...}`
+reference.
+
+Full entry shape (`command` is one array; `_JF_ARGS` is a literal in
+`environment`; secrets/refs use `{env:...}`):
+
+```json
+{
+  "mcp": {
+    "<spec.packageName>": {
+      "type": "local",
+      "command": ["npx", "--yes", "--registry", "<REGISTRY_URL>", "@jfrog/agent-guard", "--server", "<SERVER_ID>"],
+      "enabled": true,
+      "environment": {
+        "_JF_ARGS": "project=<JFROG_PROJECT_KEY>&mcp=<spec.packageName>",
+        "<SECRET_ENV_OR_HEADER_NAME>": "{env:<SECRET_ENV_OR_HEADER_NAME>}"
+      }
+    }
+  }
+}
+```
+
+- `"type": "local"` always - never `"remote"` or a top-level `"url"` (those
+  bypass the Agent Guard).
+- `command` merges the common entry's `command` + `args` into ONE array, same
+  tokens in the same order; `--yes` and `--registry <URL>` MUST precede
+  `@jfrog/agent-guard`.
+- **Include `--server <SERVER_ID>`** to authenticate JFrog - it is the default,
+  and required when the user has multiple `jf` servers; it also keeps the entry
+  working if the user later adds more servers. (It can be omitted only when a
+  single `jf` server is configured, which the Agent Guard auto-resolves; see JFrog
+  credentials below.) The `environment` block is only for the upstream MCP's own
+  secrets/inputs, never for JFrog credentials.
+- **Always keep `environment` with `_JF_ARGS`** - it carries the project +
+  package identity the Agent Guard needs to route the request. Omit only optional
+  input keys; never drop `_JF_ARGS` or the whole `environment` object.
+
+## JFrog credentials - from the `jf` config
+
+**Include `--server <SERVER_ID>` by default.** It reads that server's URL + token
+from the on-disk `jf` CLI config, is unambiguous, and keeps working if the user
+later adds more servers. Resolve `<SERVER_ID>` per the agent-guard-common
+Pre-flight rules; never emit an empty `--server`.
+
+`--server` can be **omitted only when exactly one `jf` server is configured** - in
+that case the Agent Guard auto-resolves it. With **multiple** `jf` servers,
+omitting `--server` fails: the Agent Guard cannot choose between them and does NOT
+fall back to the `jf` default, so `--server` is required. (When in doubt, include
+it.)
+
+**OpenCode exception to the shared rule.** [SKILL.md](../SKILL.md) treats `--server`
+as conditional and permits dropping it on the `JFROG_URL`+token env path (see its
+Step 4 Guardrails, "`--server` … drop it only on the `JFROG_URL`+token env
+path"). **That env path does NOT apply on OpenCode** - do NOT authenticate JFrog via env-var credentials, even though OpenCode would forward `JFROG_URL` / `JFROG_ACCESS_TOKEN` to the server. Use
+`--server <SERVER_ID>` (or a single configured `jf` server) as described above. If
+there is no usable `jf` server, ask the user to add one (`jf c add <ID>`, or
+`jf login`) before continuing.
+
+If credentials cannot be resolved (no `--server` and either zero or multiple `jf`
+servers), the entry fails to start and the server connects with no tools.
+
+## Enable
+
+Servers are enabled by default (`enabled: true` is implicit; only
+`enabled: false` disables) - writing the entry is enough, there is no separate
+approval file. To disable without deleting, set `enabled: false` in the entry and
+edit the config file directly.
+
+## Restart
+
+OpenCode reads config and connects MCP servers at startup and does not hot-reload
+edits - **tell the user to start a new OpenCode session** (exit and relaunch
+`opencode`) so the added/removed entry and any newly exported `environment`
+values take effect.
+
+## List installed
+
+`opencode mcp list` (alias `ls`) shows the configured servers with their
+connection status. For JFrog metadata, read the `mcp` object from every config
+scope listed under **Config files** above (global, `$OPENCODE_CONFIG`,
+`$OPENCODE_CONFIG_DIR`, and project). Identify the package by the `mcp=` value in
+each entry's
+`environment._JF_ARGS`; the entry key is the display name. Parse only the `mcp`
+section - do NOT print, log, or return the whole file or unrelated config values
+(it may hold provider keys and personal settings).
+
+## Verify
+
+Confirm the server exposes the upstream MCP's **real tools** (they appear to the
+agent as `<sanitized-server-name>_<tool>`). `opencode mcp list` shows connection
+status, but a "connected" row is NOT proof - the Agent Guard proxy can report up
+with 0 upstream tools.
+
+- **An `enable_<slug>_tools` tool is a normal Agent Guard gate**, not an error:
+  for MCPs that need sign-in or explicit enablement, the Agent Guard first
+  exposes this single tool; invoking it (e.g. "sign in to `<MCP>`") runs the flow
+  and the upstream MCP's real tools then appear. Re-check afterward. (OpenCode's
+  own `opencode mcp auth` is for `type: "remote"` OAuth servers only and does NOT
+  apply to this local Agent Guard entry.)
+- If the **real tools never appear** (even after enabling / signing in), a
+  required input likely did not reach the server - most often an `environment`
+  name or shell export whose case does not match the catalog input `name` (see
+  Value reference), or a variable that was not exported in the launching shell.
+  Fix it and start a new session. A truly empty tool list = Failed → see the
+  "0 tools" troubleshooting in
+  key-rules-and-troubleshooting.md.
+
+## Remove
+
+Find the target entry by matching `mcp=<spec.packageName>` in
+`environment._JF_ARGS`, then delete the `mcp.<server-name>` entry from whichever
+config holds it - check every scope listed under **Config files** above (global,
+`$OPENCODE_CONFIG`, `$OPENCODE_CONFIG_DIR`, and project). Hand-edit the file
+directly (current builds have no `opencode mcp remove`),
+touching only the target `mcp.<server-name>` entry and leaving other config
+values untouched and unprinted. There is no separate `inputs`-style array to
+clean up. Then start a new OpenCode session so the removed server stops loading.
 
 
 ## harness-vscode
@@ -608,11 +1193,21 @@ row in harness-common.md.
 
 # Persisting environment variables
 
-Read this for **shell-based harnesses (Claude Code, Cursor)** when a Step 3
-input needs to be exported so its value reference (`${VAR}` for Claude Code,
-`${env:VAR}` for Cursor) resolves — i.e. any secret, or a non-secret you chose
-to keep out of the config as a reference. (VS Code does not use shell env for
-this — it prompts for `inputs` values and stores them itself; skip this file.)
+Read this for **shell-based harnesses** when a Step 3 input needs to be exported
+so its value takes effect. How each harness picks up the exported variable:
+
+- **Claude Code** — a `${VAR}` reference in the config.
+- **Cursor** — a `${env:VAR}` reference in the config.
+- **Devin Desktop / Devin CLI** — a `${env:VAR}` reference in the config.
+- **Codex** — a variable name listed in the `env_vars` allow-list; Codex forwards
+  that named variable's value from the launching shell to the server (e.g. an env
+  var like `Authorization`).
+- **OpenCode** — a `{env:VAR}` reference in the config `environment` (OpenCode
+  also forwards its ambient environment to local MCP servers).
+
+This applies to any secret, or a non-secret you chose to keep out of the config as
+a reference. (VS Code does not use shell env for this — it prompts for `inputs`
+values and stores them itself; skip this file.)
 
 These references resolve from the shell that launched the agent, so the variable
 has to be exported in that shell and persisted across relaunches. Don't rely on
@@ -678,8 +1273,9 @@ in play before writing to it:
   secret values into a config file. For secret values, instruct the user to add
   the line themselves (e.g. via `read -rs VAR_NAME && export VAR_NAME` for the
   current session) — you never see or type the value.
-- After exporting, the user must **relaunch the agent** so `${VAR}`
-  references resolve.
+- After exporting, the user must **relaunch the agent** so the exported value
+  takes effect — the harness picks it up on next launch (resolving `${VAR}` /
+  `${env:VAR}`, or forwarding the `env_vars`-listed variable on Codex).
 
 
 ## runtime-permissions
