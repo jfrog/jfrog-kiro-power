@@ -123,7 +123,7 @@ npm run install-scripts -- --workspace # -> ./.kiro/jfrog-scripts   (this worksp
 
 ```bash
 TMP="$(mktemp -d)"
-curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.20.0 | tar -xz -C "$TMP"
+curl -fsSL https://codeload.github.com/jfrog/jfrog-skills/tar.gz/v0.31.1 | tar -xz -C "$TMP"
 for d in "$TMP"/jfrog-skills-*/skills/*/scripts; do s="$(basename "$(dirname "$d")")"; \
   mkdir -p ~/.kiro/jfrog-scripts/"$s" && cp -R "$d"/* ~/.kiro/jfrog-scripts/"$s"/; done
 rm -rf "$TMP"
@@ -133,7 +133,7 @@ rm -rf "$TMP"
 
 ```powershell
 $tmp = Join-Path $env:TEMP ([guid]::NewGuid()); New-Item -ItemType Directory -Force $tmp | Out-Null
-Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.20.0 -OutFile "$tmp\s.zip"
+Invoke-WebRequest https://codeload.github.com/jfrog/jfrog-skills/zip/v0.31.1 -OutFile "$tmp\s.zip"
 Expand-Archive "$tmp\s.zip" -DestinationPath $tmp -Force
 Get-ChildItem "$tmp\jfrog-skills-*\skills\*\scripts" -Directory | ForEach-Object {
   $s = $_.Parent.Name; New-Item -ItemType Directory -Force "$HOME\.kiro\jfrog-scripts\$s" | Out-Null
