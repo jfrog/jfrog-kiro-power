@@ -32,7 +32,7 @@ So the canonical JFrog skills are delivered two ways:
    (vendored and pinned from [`jfrog/jfrog-skills`](https://github.com/jfrog/jfrog-skills)) and rendered
    into `steering/` files that ship *inside* the power. On install, Kiro loads them automatically — the
    knowledge works immediately, offline, with no download. Deep reference material is bundled as
-   `#jfrog-references` / `#jfrog-ai-catalog-skills-references` (the render redirects there instead of the
+   `#jfrog-references` / `#jfrog-ai-catalog-references` (the render redirects there instead of the
    on-disk `references/*.md` files a power can't carry).
 2. **Helper scripts (on demand).** The bundled steering carries knowledge only — a power can't bundle a
    skill's **runnable helper scripts** (login/environment-check). When one is needed, an on-demand step
@@ -42,13 +42,15 @@ So the canonical JFrog skills are delivered two ways:
 
 Everything ships pinned and reproducible for a given power version; see [VENDOR.md](./VENDOR.md).
 
-### The six skills
+### The seven skills
 
 - **`jfrog`** — interact with the JFrog Platform via the JFrog CLI and REST/GraphQL APIs (Artifactory,
   Xray, builds, permissions, projects, release lifecycle, advanced security, and more).
-- **`jfrog-package-safety-and-download`** — check package safety/curation status and download packages
+- **`jfrog-init`** — set up and verify the JFrog plugin on first install, to complete configuration, or
+  to diagnose a broken setup.
+- **`jfrog-package-curation`** — check package safety/curation status and download packages
   through JFrog.
-- **`jfrog-ai-catalog-skills`** — discover, install, manage, and publish agent skills hosted in the JFrog
+- **`jfrog-ai-catalog`** — discover, install, manage, and publish agent skills hosted in the JFrog
   AI Catalog via `jf skills`.
 - **`jfrog-mcp-management`** — install, list, and remove MCP servers/tools via the JFrog Agent Guard, and
   browse the JFrog MCP catalog.

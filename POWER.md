@@ -30,9 +30,11 @@ are delivered here as steering files that ship with the power and load automatic
 |---------------|-----------|--------|
 | `jfrog` | auto | Foundational JFrog skill — CLI setup/auth, tool strategy, Artifactory/Xray/projects/builds/permissions, security audits, platform administration. |
 | `jfrog-references` | manual (`#jfrog-references`) | Deep reference material — `jf api` paths, AQL syntax, OneModel GraphQL, entity models, per-domain gotchas. |
-| `jfrog-package-safety-and-download` | auto | Check whether a package version is safe/curated and download it through Artifactory. |
-| `jfrog-ai-catalog-skills` | auto | Discover, install, manage, and publish agent skills in the JFrog AI Catalog via `jf skills`. |
-| `jfrog-ai-catalog-skills-references` | manual (`#jfrog-ai-catalog-skills-references`) | Deep reference material for the AI-Catalog workflow. |
+| `jfrog-init` | auto | Set up and verify the JFrog plugin — first install, complete configuration, or diagnose a broken setup. |
+| `jfrog-init-references` | manual (`#jfrog-init-references`) | Deep reference material for plugin readiness checks. |
+| `jfrog-package-curation` | auto | Check whether a package version is safe/curated and download it through Artifactory. |
+| `jfrog-ai-catalog` | auto | Discover, install, manage, and publish agent skills in the JFrog AI Catalog via `jf skills`. |
+| `jfrog-ai-catalog-references` | manual (`#jfrog-ai-catalog-references`) | Deep reference material for the AI-Catalog workflow. |
 | `jfrog-mcp-management` | auto | Install, list, and remove MCP servers/tools via the JFrog Agent Guard, and browse the JFrog MCP catalog. |
 | `jfrog-mcp-management-references` | manual (`#jfrog-mcp-management-references`) | Deep reference material for Agent Guard activation and per-harness (Claude/Cursor/VS Code) setup. |
 | `jfrog-reference-architecture` | auto | JFrog Platform topology, sizing, deployment patterns, HA, air-gapped, and disaster-recovery guidance. |
@@ -42,7 +44,7 @@ are delivered here as steering files that ship with the power and load automatic
 
 The `auto` files activate when your request matches their description. When you need deep detail (exact
 API paths, AQL, schemas), pull the matching `-references` file (e.g. `#jfrog-references`,
-`#jfrog-ai-catalog-skills-references`).
+`#jfrog-ai-catalog-references`).
 
 > **Scope of the Power.** A Kiro Power itself carries **knowledge only** — `POWER.md` + `mcp.json` +
 > `steering/*.md`, no executables — so the steering above (plus the `#jfrog-references` bundles) is

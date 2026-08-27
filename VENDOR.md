@@ -46,8 +46,8 @@ The result is a flat, committed tree:
 ```
 skills/
   jfrog/SKILL.md (+ references/ scripts/ assets/)
-  jfrog-package-safety-and-download/SKILL.md
-  jfrog-ai-catalog-skills/SKILL.md (+ references/)
+  jfrog-package-curation/SKILL.md
+  jfrog-ai-catalog/SKILL.md (+ references/)
 ```
 
 The script is dependency-free Node ESM and makes no changes outside the vendored `paths`.
