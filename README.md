@@ -46,7 +46,7 @@ Everything ships pinned and reproducible for a given power version; see [VENDOR.
 
 - **`jfrog`** — interact with the JFrog Platform via the JFrog CLI and REST/GraphQL APIs (Artifactory,
   Xray, builds, permissions, projects, release lifecycle, advanced security, and more).
-- **`jfrog-package-safety-and-download`** — check package safety/curation status and download packages
+- **`jfrog-package-curation`** — check package safety/curation status and download packages
   through JFrog.
 - **`jfrog-ai-catalog-skills`** — discover, install, manage, and publish agent skills hosted in the JFrog
   AI Catalog via `jf skills`.
