@@ -25,7 +25,6 @@ import {
   assertNoDeadRefPointers,
   collapseSelfReferentialLinks,
 } from './gen-steering.mjs';
-import { syncPin } from './sync-pin.mjs';
 import { extractTarToDir, fetchTarGz } from './lib/targz.mjs';
 
 function writeSkill(root, dir, body) {
@@ -517,18 +516,6 @@ test('rewriteScriptPointers redirects a cross-skill scripts/<file> to the OTHER 
     'jfrog-mcp-management'
   );
   assert.equal(out, 'mirrors `~/.kiro/jfrog-scripts/jfrog/check-environment.sh` detect_harness()');
-});
-
-// syncPin's prose rule must only touch a backticked semver that's explicitly called out as "the pinned
-// version" — not any backticked vX.Y.Z-shaped string in the file. Otherwise an unrelated version mention
-// added later (a kiro-cli tag, a jf CLI minimum version) would be silently overwritten on the next pin bump.
-test('syncPin only rewrites a backticked semver anchored by "pinned version", not an unrelated one', () => {
-  const text =
-    'fetched from the same pinned version (`v0.19.0`) into place. ' +
-    'Requires jf CLI `v2.100.0` or later — unrelated to the skills pin.';
-  const out = syncPin(text, 'jfrog/jfrog-skills', 'v0.20.0');
-  assert.match(out, /pinned version \(`v0\.20\.0`\)/, 'the anchored pin is updated');
-  assert.match(out, /jf CLI `v2\.100\.0`/, 'an unrelated backticked semver elsewhere is left untouched');
 });
 
 // install-scripts must land ONLY the scripts/ contents (no SKILL.md, no references) into <dest>/<skill>/.

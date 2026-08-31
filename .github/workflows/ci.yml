@@ -26,12 +26,6 @@ jobs:
       - name: Validate skills, POWER.md, and steering
         run: npm run validate
 
-      - name: Validate docs have no plugin or skill release versions
-        env:
-          DOCS: README.md POWER.md
-          PLUGIN_MANIFEST: package.json
-        run: node scripts/validate-readme-no-version.mjs
-
       # steering/ is generated from skills/ by gen-steering.mjs. It must equal a fresh render,
       # i.e. it was regenerated (not hand-edited) after the last skills change.
       - name: Steering drift check

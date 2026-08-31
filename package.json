@@ -8,7 +8,6 @@
   "scripts": {
     "sync-skills": "node scripts/sync-skills.mjs",
     "gen-steering": "node scripts/gen-steering.mjs",
-    "sync-pin": "node scripts/sync-pin.mjs",
     "revendor": "npm run sync-skills && npm run gen-steering",
     "install-scripts": "node scripts/install-scripts.mjs",
     "install-cli": "node scripts/install-cli.mjs",
