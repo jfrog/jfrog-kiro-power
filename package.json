@@ -1,9 +1,9 @@
 {
   "name": "jfrog-kiro-power",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
-  "description": "JFrog for Kiro — IDE Power (POWER.md + mcp.json + steering, with JFrog MCP server support) and kiro-cli (skills) built from the vendored JFrog Agent Skills.",
+  "description": "JFrog for Kiro \u2014 IDE Power (POWER.md + mcp.json + steering, with JFrog MCP server support) and kiro-cli (skills) built from the vendored JFrog Agent Skills.",
   "license": "Apache-2.0",
   "scripts": {
     "sync-skills": "node scripts/sync-skills.mjs",

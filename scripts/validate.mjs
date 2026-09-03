@@ -72,6 +72,11 @@ export function validatePower(md) {
 // mcp.json ships with the power (see README/POWER.md); it must stay valid JSON with the JFrog MCP
 // server's url wired to the ${JFROG_PLATFORM_URL} env-var placeholder, not a raw/mistyped value. This
 // was deleted once already in this repo's history — catch that regression (or a broken url) at build time.
+//
+// The jfrog entry connects via OAuth (Kiro's dynamic-client-registration flow, triggered by the absence
+// of both `headers` and `oauth: false`) rather than a static bearer token. Fail the build if either
+// a `headers`/Authorization block or `oauth: false` reappears — that would silently regress the connection
+// back to token auth, and nothing else would catch it (see mcp.json history).
 export function validateMcpJson(text) {
   if (text == null) return ['mcp.json: file is missing'];
   let json;
@@ -80,12 +85,20 @@ export function validateMcpJson(text) {
   } catch (e) {
     return [`mcp.json: invalid JSON (${e.message})`];
   }
-  const url = json?.mcpServers?.jfrog?.url;
-  if (typeof url !== 'string' || !url) return ['mcp.json: missing mcpServers.jfrog.url'];
-  if (!/^https:\/\/\$\{[A-Z0-9_]+\}\/mcp$/.test(url)) {
-    return [`mcp.json: mcpServers.jfrog.url "${url}" must look like https://\${ENV_VAR}/mcp`];
+  const errors = [];
+  const entry = json?.mcpServers?.jfrog;
+  const url = entry?.url;
+  if (typeof url !== 'string' || !url) errors.push('mcp.json: missing mcpServers.jfrog.url');
+  else if (!/^https:\/\/\$\{[A-Z0-9_]+\}\/mcp$/.test(url)) {
+    errors.push(`mcp.json: mcpServers.jfrog.url "${url}" must look like https://\${ENV_VAR}/mcp`);
   }
-  return [];
+  if (entry && entry.headers !== undefined) {
+    errors.push('mcp.json: mcpServers.jfrog must not set "headers" — this server connects via OAuth, not a static bearer token');
+  }
+  if (entry?.oauth === false) {
+    errors.push('mcp.json: mcpServers.jfrog must not set "oauth: false" — that disables OAuth auto-detection');
+  }
+  return errors;
 }
 
 function main() {

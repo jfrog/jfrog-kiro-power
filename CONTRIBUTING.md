@@ -42,7 +42,7 @@ Kiro adds a power in two ways, and they are not equivalent:
   `kiro_powers` activation tool fails with "Power not installed" — this is **expected** for local imports,
   not a bug. Use this mode for **fast iteration**.
 - **GitHub install** (Import from GitHub): Kiro **copies** `POWER.md` + `steering/` into
-  `~/.kiro/powers/installed/jfrog/`, and activation works. Use this for **production-style testing**.
+  `~/.kiro/powers/installed/jfrog-kiro-power/`, and activation works. Use this for **production-style testing**.
 
 ### Iterating on steering without a full install
 
@@ -56,9 +56,9 @@ Optional local dev workaround to make `kiro_powers` activation work without GitH
 dir to mirror a GitHub install:
 
 ```bash
-mkdir -p ~/.kiro/powers/installed/jfrog
-cp POWER.md ~/.kiro/powers/installed/jfrog/
-rm -rf ~/.kiro/powers/installed/jfrog/steering && cp -R steering ~/.kiro/powers/installed/jfrog/
+mkdir -p ~/.kiro/powers/installed/jfrog-kiro-power
+cp POWER.md ~/.kiro/powers/installed/jfrog-kiro-power/
+rm -rf ~/.kiro/powers/installed/jfrog-kiro-power/steering && cp -R steering ~/.kiro/powers/installed/jfrog-kiro-power/
 # then fully quit & reopen Kiro
 ```
 
@@ -86,14 +86,13 @@ error; if it is older, it fails with a revert warning.
 
 A merge without a bump therefore turns `Release` red. That is by design, not a bug to work around:
 the bump is reviewed in the PR that makes it, and failing loudly beats silently skipping a release
-or re-tagging a shipped version. The `0.1.0` → `0.1.1` bump in the PR that introduced this flow is
-there for the same reason — so its first run on `main` publishes a real release instead of tripping
-the "already released" guard. Skills-sync PRs that already bump to `0.1.1`
-([#5](https://github.com/jfrog/jfrog-kiro-power/pull/5),
-[#6](https://github.com/jfrog/jfrog-kiro-power/pull/6),
-[#8](https://github.com/jfrog/jfrog-kiro-power/pull/8)) will land that same version
-again after `v0.1.1` ships — rebase each onto `main` and bump to `0.1.2` or later
-before merging, or Release fails with "already released".
+or re-tagging a shipped version. The PR that introduced this flow bumps past the newest release tag
+for the same reason — so its first run on `main` publishes a real release instead of tripping the
+"already released" guard.
+
+The same applies to any long-lived branch: a version that was still unreleased when the branch was
+opened may have shipped since. Merge `main` in and re-bump above the latest `vX.Y.Z` tag before
+merging, or Release fails with "already released".
 
 The release workflow runs the full test and validate suite plus the steering, pin-sync and
 vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
