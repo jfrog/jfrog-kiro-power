@@ -75,27 +75,31 @@ rm -rf ~/.kiro/powers/installed/jfrog-kiro-power/steering && cp -R steering ~/.k
 
 ## Releasing
 
-The version lives in one place only: `.version` in [`package.json`](package.json). Releases are cut by
-pushing a tag, because for a Kiro power the tag *is* the install target - it is what users pin with
-"Import from GitHub".
+Every merge to `main` releases, so **every** PR to `main` must bump `.version` in
+[`package.json`](package.json) — including docs- and CI-only changes. That manifest is the only
+place the version lives, and for a Kiro power the release tag is what users pin with "Import from
+GitHub".
 
-1. In your PR, bump `.version` in `package.json`.
-2. Merge to `main`.
-3. Tag that `main` commit and push it:
+Every push to `main` compares the version against the latest release tag: if the version is newer,
+a release proceeds; if it matches the latest tag, the workflow fails with a clear "already released"
+error; if it is older, it fails with a revert warning.
 
-   ```bash
-   git checkout main && git pull
-   git tag v0.1.1 && git push origin v0.1.1
-   ```
+A merge without a bump therefore turns `Release` red. That is by design, not a bug to work around:
+the bump is reviewed in the PR that makes it, and failing loudly beats silently skipping a release
+or re-tagging a shipped version. The PR that introduced this flow bumps past the newest release tag
+for the same reason — so its first run on `main` publishes a real release instead of tripping the
+"already released" guard.
 
-The release workflow then refuses the tag unless it is well-formed `vX.Y.Z`, sits on `main`, is newer
-than the last release, and matches `package.json` - a tag that disagrees would ship a power whose
-manifest contradicts the version users installed. After that it runs the full test and validate suite
-plus the steering, pin-sync and vendoring drift checks, and publishes a GitHub Release.
+The same applies to any long-lived branch: a version that was still unreleased when the branch was
+opened may have shipped since. Merge `main` in and re-bump above the latest `vX.Y.Z` tag before
+merging, or Release fails with "already released".
 
-Because the tag is pushed before any of that runs, a tag can briefly exist while still failing its
-checks. The workflow deletes the tag if any step fails, so a broken tag doesn't linger as a
-plausible-looking install target - fix the problem and re-tag.
+The release workflow runs the full test and validate suite plus the steering, pin-sync and
+vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
+`gh release create --target`, so a failed run can't leave a tag behind with no release attached to
+it). The rollback step that deletes a partially published release only runs when the version gate
+itself passed: a gate failure means the version was already released by an earlier run, and
+deleting that release would destroy something already shipped.
 
 ## Security issues
 
