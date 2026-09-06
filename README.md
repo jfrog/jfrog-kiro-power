@@ -11,10 +11,10 @@ Works in both the **Kiro IDE** (as a Power) and **`kiro-cli`** (as additive skil
 | `jfrog` | JFrog Platform operations via CLI and APIs (Artifactory, Xray, access, projects, and more). |
 | `jfrog-init` | Plugin readiness / setup (detect CLI, config, MCP, and related bootstrap steps). |
 | `jfrog-mcp-management` | Install, list, and remove MCP servers through JFrog Agent Guard; browse the JFrog MCP catalog. |
-| `jfrog-ai-catalog-skills` | Discover, install, manage, and publish agent skills from the JFrog AI Catalog via `jf skills`. |
+| `jfrog-ai-catalog` | Discover, install, manage, and publish agent skills from the JFrog AI Catalog via `jf skills`. |
 | `jfrog-setup-package-managers` | Bind package managers (npm, pip, Maven, Go, and more) to JFrog Artifactory via `jf setup`. |
 | `jfrog-reference-architecture` | JFrog Platform topology, sizing, deployment patterns, and multi-site guidance. |
-| `jfrog-package-safety-and-download` | Check package safety and download via Artifactory. |
+| `jfrog-package-curation` | Check package safety and download via Artifactory. |
 
 After install, use them as `/jfrog`, `/jfrog-init`, etc. in the IDE or `kiro-cli`.
 
@@ -22,16 +22,17 @@ Skill content is vendored under `skills/` — see [VENDOR.md](VENDOR.md).
 
 ## JFrog MCP
 
-The plugin registers a remote JFrog MCP server pre-wired at `https://${JFROG_PLATFORM_URL}/mcp` (OAuth, no API keys). Set `JFROG_PLATFORM_URL` to your platform host and the connection is automatic on first use.
+The plugin ships with the JFrog Platform MCP server at `https://${JFROG_PLATFORM_URL}/mcp`. `JFROG_PLATFORM_URL` is a placeholder in `mcp.json` that `/jfrog-init` replaces automatically with the host from your `jf config`. The connection uses OAuth — Kiro opens a browser sign-in on first use and caches the session.
 
 ---
 
-Before installing, make sure you have:
+## Prerequisites
 
 - **Kiro** — IDE installed from [kiro.dev](https://kiro.dev), and/or `kiro-cli` for terminal use.
 - **JFrog CLI** (≥ 2.100.0) — with a configured server (`jf config add`). See [Authentication](#authentication).
-- **`JFROG_PLATFORM_URL`** — environment variable set to your JFrog platform host only (e.g. `mycompany.jfrog.io`). Required for the MCP server entry.
-- **Skill runtime requirements** — `jf` CLI, `jq`, and `curl` on `PATH`. For minimum versions, see the upstream skills [Requirements](https://github.com/jfrog/jfrog-skills).
+- **Node.js** (≥ 18) — with `npx` on your `PATH`.
+- **`JFROG_PLATFORM_URL`** — resolved automatically by `/jfrog-init` from your `jf config`. No manual export needed.
+- **Skill runtime requirements** — `jq` and `curl` on `PATH`. For minimum versions, see the upstream skills [Requirements](https://github.com/jfrog/jfrog-skills).
 
 ---
 
@@ -70,15 +71,15 @@ The Power ships `POWER.md` + `mcp.json` + `steering/`. Steering loads automatica
 > **Install from GitHub** rather than a local folder. Kiro copies the Power into
 > `~/.kiro/powers/installed/jfrog-kiro-power/`, which is required for reliable activation.
 
-4. **Install the JFrog skills** — the Power provides knowledge but does not register `/jfrog` slash commands. Those come from **skills**. Open a terminal and run (macOS / Linux):
+4. **(Optional) Install the JFrog skills** — if you want to invoke skills using slash commands (e.g. `/jfrog`, `/jfrog-init`), open a terminal and run (macOS / Linux):
 
    ```bash
    curl -fsSL https://raw.githubusercontent.com/jfrog/jfrog-kiro-power/main/scripts/bootstrap-cli.sh | bash
    ```
 
-   This copies skills into `~/.kiro/skills/` (read by both IDE and `kiro-cli`). Windows: clone this repo and run `npm run install-cli` instead.
+   This copies skills into `~/.kiro/skills/` (read by both IDE and `kiro-cli`). Windows: clone this repo and run `npm run install-cli` instead. Without this step, the Power still works via natural language — steering loads automatically.
 
-5. **Run `/jfrog-init`** in a Kiro chat — it checks CLI, server config, and MCP registration, and walks you through anything missing. Restart Kiro afterwards so the MCP entry reloads.
+5. **Run `/jfrog-init`** in a Kiro chat — it checks CLI, server config, and MCP registration, and walks you through anything missing. Restart Kiro afterwards so the MCP entry reloads. (`/jfrog-init` is available after step 4.)
 
 ### Notes
 
@@ -126,7 +127,7 @@ If you use both the IDE and `kiro-cli`, give the CLI its own profile (`KIRO_HOME
 
 ## Verify
 
-Verification is a required install step, not a troubleshooting fallback:
+After installation, confirm:
 
 1. `/jfrog-init` — the readiness walk completes without blocking errors (checks CLI, server, MCP).
 2. **Powers panel** (IDE) — `jfrog-kiro-power` is listed.
@@ -158,7 +159,7 @@ jf login              # browser-based setup
 jf config add         # interactive prompts for URL + token
 ```
 
-The MCP server uses **OAuth** — Kiro opens a browser sign-in on first use and caches the session. No bearer token or `.env` file is needed.
+The MCP server uses **OAuth** — Kiro opens a browser sign-in on first use and caches the session.
 
 ---
 
@@ -216,12 +217,10 @@ See the [JFrog MCP Registry troubleshooting guide](https://docs.jfrog.com/ai-ml/
 
 ### Build tasks
 
-The skills are embedded in this repo (`skills/`) and rendered into `steering/`. Users never fetch to use the power — the steering is bundled. These tasks are for **maintainers**:
+These tasks are for **maintainers** only:
 
 - `npm run sync-skills` — re-vendor skills from `jfrog/jfrog-skills` at the pinned tag (see [VENDOR.md](./VENDOR.md))
 - `npm run gen-steering` — regenerate `steering/` from the embedded `skills/`
-- `npm run install-scripts` — install JFrog helper scripts into `~/.kiro/jfrog-scripts`
-- `npm run install-cli` — additive install of JFrog skills (equivalent to the bootstrap one-liner)
 - `npm run verify-install` — check prerequisites (`jf` CLI ≥ 2.100.0 + a configured server)
 - `npm run validate` — lint skill frontmatter, POWER.md, and steering
 - `npm test` — run the validator unit tests
