@@ -81,12 +81,6 @@ jobs:
           git diff --exit-code -- steering/ \
             || { echo "::error::steering/ is stale at this tag — regenerate and re-tag"; exit 1; }
 
-      - name: Pin-sync drift check
-        run: |
-          npm run sync-pin
-          git diff --exit-code -- POWER.md README.md \
-            || { echo "::error::POWER.md/README jfrog-skills pin != sync-skills-vendor.json at this tag — regenerate and re-tag"; exit 1; }
-
       - name: Vendoring drift check
         run: |
           npm run sync-skills

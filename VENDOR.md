@@ -22,7 +22,7 @@ The vendoring source is declared in `scripts/sync-skills-vendor.json`:
 ```json
 {
   "repo": "jfrog/jfrog-skills",
-  "pin": "v0.20.0",
+  "pin": "<upstream-tag>",
   "paths": ["skills"]
 }
 ```
@@ -30,7 +30,7 @@ The vendoring source is declared in `scripts/sync-skills-vendor.json`:
 | Field   | Meaning                                                                                     |
 | ------- | ------------------------------------------------------------------------------------------- |
 | `repo`  | The upstream GitHub repository (`owner/name`) to vendor from.                               |
-| `pin`   | The exact upstream ref to vendor (a tag, e.g. `v0.20.0`). Pin to a tag for reproducibility. |
+| `pin`   | The exact upstream release tag to vendor. Pin to a tag for reproducibility.                |
 | `paths` | The paths within the upstream repo to copy into this repo root. Currently just `skills`.    |
 
 ## How the sync works
@@ -52,34 +52,33 @@ skills/
 
 The script is dependency-free Node ESM and makes no changes outside the vendored `paths`.
 
+The README and `POWER.md` deliberately omit release numbers. [`package.json`](package.json) and GitHub tags/releases are the authoritative power-version sources; `scripts/sync-skills-vendor.json` is the authoritative skills pin.
+
 ## Bumping the pin
 
-1. Edit `scripts/sync-skills-vendor.json` and set `pin` to the new upstream tag. This is the **single
-   source of truth** — the hardcoded tags in POWER.md/README are synced from it in the next step (no
-   longer edited by hand).
+1. Edit `scripts/sync-skills-vendor.json` and set `pin` to the new upstream tag. This is the single
+   source of truth for the vendored skills and the helper scripts installed by `install-scripts.mjs`.
 2. Re-sync everything from the pin with one command:
 
    ```bash
-   npm run revendor   # = sync-skills + gen-steering + sync-pin
+   npm run revendor   # = sync-skills + gen-steering
    ```
 
    Individually: `npm run sync-skills` (re-vendor `skills/`), `npm run gen-steering` (regenerate
-   `steering/`), `npm run sync-pin` (rewrite the jfrog-skills tag in POWER.md/README to the new pin).
+   `steering/`).
 
 3. Review the diffs and commit them **together with** the updated `sync-skills-vendor.json`:
 
    ```bash
-   git add scripts/sync-skills-vendor.json skills steering POWER.md README.md
-   git commit -m "feat(skills): vendor jfrog-skills@<tag>"
+   git add scripts/sync-skills-vendor.json skills steering
+   git commit -m "feat(skills): update vendored jfrog-skills"
    ```
 
 4. Cut a power release so the new steering (and skills) ship to users. Until a release is published,
    installed powers keep using the previously vendored version.
 
-> **CI enforces this.** `.github/workflows/ci.yml` re-runs `gen-steering`, `sync-pin`, and `sync-skills`
-> and fails on any diff — so a bump that forgets a step (stale steering, or a POWER.md/README pin that
-> doesn't match `sync-skills-vendor.json`) is caught before merge. Run `npm run revendor` locally and
-> commit a clean tree.
+> **CI enforces this.** `.github/workflows/ci.yml` re-runs `gen-steering` and `sync-skills`
+> and fails on any generated or vendored diff. Run `npm run revendor` locally and commit a clean tree.
 
 ## Notes
 
