@@ -94,8 +94,8 @@ The same applies to any long-lived branch: a version that was still unreleased w
 opened may have shipped since. Merge `main` in and re-bump above the latest `vX.Y.Z` tag before
 merging, or Release fails with "already released".
 
-The release workflow runs the full test and validate suite plus the steering, pin-sync and
-vendoring drift checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
+The release workflow runs the full test and validate suite plus the steering and vendoring drift
+checks, and publishes a GitHub Release (creating the `vX.Y.Z` tag atomically via
 `gh release create --target`, so a failed run can't leave a tag behind with no release attached to
 it). The rollback step that deletes a partially published release only runs when the version gate
 itself passed: a gate failure means the version was already released by an earlier run, and
