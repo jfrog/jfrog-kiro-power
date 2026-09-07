@@ -74,7 +74,8 @@ The README and `POWER.md` deliberately omit release numbers. [`package.json`](pa
    git commit -m "feat(skills): update vendored jfrog-skills"
    ```
 
-4. Cut a power release so the new steering (and skills) ship to users. Until a release is published,
+4. Bump `.version` in [`package.json`](package.json) in the same PR: merging to `main` is what cuts
+   the release (see [Releasing](./CONTRIBUTING.md#releasing)). Until that release is published,
    installed powers keep using the previously vendored version.
 
 > **CI enforces this.** `.github/workflows/ci.yml` re-runs `gen-steering` and `sync-skills`
