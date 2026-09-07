@@ -29,16 +29,16 @@ The plugin ships with the JFrog Platform MCP server at `https://${JFROG_PLATFORM
 ## Prerequisites
 
 - **Kiro** — IDE installed from [kiro.dev](https://kiro.dev), and/or `kiro-cli` for terminal use.
-- **JFrog CLI** (≥ 2.100.0) — with a configured server (`jf config add`). See [Authentication](#authentication).
-- **Node.js** (≥ 18) — with `npx` on your `PATH`.
+- **JFrog CLI** — with a configured server (`jf config add`). See [Authentication](#authentication) and [Install the JFrog CLI](https://docs.jfrog.com/integrations/docs/download-and-install-the-jfrog-cli).
+- **Node.js** — with `npx` on your `PATH`.
 - **`JFROG_PLATFORM_URL`** — resolved automatically by `/jfrog-init` from your `jf config`. No manual export needed.
-- **Skill runtime requirements** — `jq` and `curl` on `PATH`. For minimum versions, see the upstream skills [Requirements](https://github.com/jfrog/jfrog-skills).
+- **Skill runtime requirements** — `jq` and `curl` on `PATH`. For minimum versions, see the upstream skills [Requirements](https://github.com/jfrog/jfrog-skills/blob/main/README.md#requirements).
 
 ---
 
 ## Installation
 
-### 1. Install the JFrog CLI (v2.100.0+)
+### 1. Install the JFrog CLI
 
 ```bash
 # macOS
@@ -79,7 +79,9 @@ The Power ships `POWER.md` + `mcp.json` + `steering/`. Steering loads automatica
 
    This copies skills into `~/.kiro/skills/` (read by both IDE and `kiro-cli`). Windows: clone this repo and run `npm run install-cli` instead. Without this step, the Power still works via natural language — steering loads automatically.
 
-5. **Run `/jfrog-init`** in a Kiro chat — it checks CLI, server config, and MCP registration, and walks you through anything missing. Restart Kiro afterwards so the MCP entry reloads. (`/jfrog-init` is available after step 4.)
+5. **(Requires step 4) Run `/jfrog-init`** in a Kiro chat — it checks CLI, server config, and MCP registration, and walks you through anything missing. Restart Kiro afterwards so the MCP entry reloads.
+
+   If you skipped step 4, ask the agent in natural language (e.g. *"initialize JFrog"* or *"check my JFrog setup"*).
 
 ### Notes
 
@@ -129,9 +131,9 @@ If you use both the IDE and `kiro-cli`, give the CLI its own profile (`KIRO_HOME
 
 After installation, confirm:
 
-1. `/jfrog-init` — the readiness walk completes without blocking errors (checks CLI, server, MCP).
+1. **Readiness check** — if you installed skills (step 4), run `/jfrog-init`. Otherwise, ask the agent *"check my JFrog setup"*.
 2. **Powers panel** (IDE) — `jfrog-kiro-power` is listed.
-3. **Slash commands** (IDE or `kiro-cli`) — type `/jfrog` and confirm the JFrog skills appear.
+3. **Slash commands** — if you installed skills (step 4), type `/jfrog` and confirm the JFrog skills appear.
 4. **MCP** — Kiro connects to the JFrog MCP server (OAuth sign-in on first use).
 
 If any check fails, see [Recovery](#recovery).
@@ -221,7 +223,7 @@ These tasks are for **maintainers** only:
 
 - `npm run sync-skills` — re-vendor skills from `jfrog/jfrog-skills` at the pinned tag (see [VENDOR.md](./VENDOR.md))
 - `npm run gen-steering` — regenerate `steering/` from the embedded `skills/`
-- `npm run verify-install` — check prerequisites (`jf` CLI ≥ 2.100.0 + a configured server)
+- `npm run verify-install` — check prerequisites (JFrog CLI + a configured server)
 - `npm run validate` — lint skill frontmatter, POWER.md, and steering
 - `npm test` — run the validator unit tests
 
