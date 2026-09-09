@@ -77,7 +77,7 @@ The Power ships `POWER.md` + `mcp.json` + `steering/`. Steering loads automatica
    npx -y github:jfrog/jfrog-kiro-power
    ```
 
-   This works on **macOS, Linux, and Windows** (requires Node.js). It downloads skills from GitHub and copies them into `~/.kiro/skills/` (read by both IDE and `kiro-cli`). Without this step, the Power still works via natural language — steering loads automatically.
+   This works on **macOS, Linux, and Windows** (requires Node.js and Git). The package includes the JFrog skills — the installer copies them into `~/.kiro/skills/` (read by both IDE and `kiro-cli`). Without this step, the Power still works via natural language — steering loads automatically.
 
    <details><summary>Alternative: bash one-liner (macOS / Linux only)</summary>
 
@@ -94,7 +94,19 @@ The Power ships `POWER.md` + `mcp.json` + `steering/`. Steering loads automatica
 ### Notes
 
 > **`kiro-cli` users:** to avoid loading JFrog twice when using both IDE and CLI, give the CLI its own
-> profile: `KIRO_HOME=~/.kiro-cli npx -y github:jfrog/jfrog-kiro-power`, or scope to a workspace: add `--workspace`.
+> profile:
+>
+> ```bash
+> # macOS / Linux
+> KIRO_HOME=~/.kiro-cli npx -y github:jfrog/jfrog-kiro-power
+> ```
+>
+> ```powershell
+> # Windows (PowerShell)
+> $env:KIRO_HOME = "$HOME\.kiro-cli"; npx -y github:jfrog/jfrog-kiro-power
+> ```
+>
+> Or scope to a workspace with `--workspace`.
 
 > **Helper scripts (on demand).** The bootstrap copies skills including their `scripts/` subdirectories.
 > If you installed the Power without step 4, some requests that need a runnable helper script
