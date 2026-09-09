@@ -1,32 +1,42 @@
 #!/usr/bin/env node
 // (c) JFrog Ltd. (2026)
 //
-// kiro-cli is a SEPARATE runtime from the Kiro IDE — it does not read ~/.kiro/powers/, so it cannot
-// consume the IDE power (POWER.md). Its additive mechanism is skills (~/.kiro/skills/): the default
-// agent auto-loads them and composes JFrog into ANY session — the default agent, or a user's own custom
-// agent (which inherits default skills). The skills carry the full JFrog knowledge plus the runnable
-// helper scripts and `/`-invoke, so they are the complete CLI capability on their own. Steering is the
-// IDE power's channel and is intentionally NOT copied here — the steering is generated from these same
-// skills, so shipping it too would advertise JFrog twice within one CLI session.
-// It never installs a replacement --agent (a kiro-cli --agent is singular per session).
+// Additive install of the JFrog integration for Kiro (IDE skills + kiro-cli).
+// Copies the JFrog skills into ~/.kiro/skills/ so JFrog composes into ANY kiro-cli session (the
+// default agent, or a user's own custom agent) and is accessible via slash commands in the IDE.
+//
+// TWO MODES — auto-detected:
+//   LOCAL  (from a checkout):  node scripts/install-cli.mjs          — reads skills/ from the repo
+//   REMOTE (no checkout):      npx -y github:jfrog/jfrog-kiro-power  — downloads from GitHub
+//
+// The script checks whether skills/ exists next to it. If yes → local mode. If no → remote mode
+// (fetches the tarball from GitHub). Both modes then run the same install logic.
 //
 //   node scripts/install-cli.mjs               # additive: skills + MCP -> ~/.kiro (global)
 //   node scripts/install-cli.mjs --workspace   # additive: skills + MCP -> ./.kiro
+//   npx -y github:jfrog/jfrog-kiro-power       # remote: same result, no clone needed (all platforms)
 //
 // KIRO_HOME=<dir>  give the CLI its own profile (e.g. ~/.kiro-cli) instead of the default ~/.kiro, so
 // its skills never land where the IDE reads (see README "Running both surfaces on one machine").
 // Ignored with --workspace, which always scopes to ./.kiro regardless of KIRO_HOME.
 //
-// Dependency-free Node ESM; the skills copy touches no network (copies the local embedded files). The
-// MCP step shells out to the local `kiro-cli` binary only — no network call of its own either.
+// Options / env:
+//   --workspace                  install into ./.kiro/skills instead of ~/.kiro/skills
+//   KIRO_HOME=<dir>              custom Kiro home (ignored with --workspace)
+//   JFROG_KIRO_REPO=owner/repo   override source repo   (default: jfrog/jfrog-kiro-power)
+//   JFROG_KIRO_REF=<branch/tag>  override source ref    (default: latest release tag, else main)
+//   KIRO_POWER_SRC=<dir>         force local source from a specific directory (offline/testing)
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+import { fetchTarGz, extractTarToDir } from './lib/targz.mjs';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
+const REPO = process.env.JFROG_KIRO_REPO ?? 'jfrog/jfrog-kiro-power';
 
 // Expand a leading `~` (env vars are not shell-expanded) and resolve to an absolute path.
 export function expandHome(p) {
@@ -60,6 +70,53 @@ export async function installAdditive({ skillsSrc, dest }) {
   }
 
   return { skills, skillsDest };
+}
+
+// ---------------------------------------------------------------------------
+// Remote-fetch helpers (used when skills/ is not available locally)
+// ---------------------------------------------------------------------------
+
+/** Resolve the git ref to download: explicit env > latest release tag > "main". */
+export async function resolveRef(repo = REPO) {
+  if (process.env.JFROG_KIRO_REF) return process.env.JFROG_KIRO_REF;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.tag_name) return data.tag_name;
+    }
+  } catch { /* offline or no releases — fall through */ }
+  return 'main';
+}
+
+/**
+ * Resolve the skills source directory. Returns { skillsSrc, tmpDir } where tmpDir is set only when
+ * a remote fetch was needed (caller must clean it up).
+ *
+ * Priority: KIRO_POWER_SRC env > local skills/ next to script > download from GitHub.
+ */
+export async function resolveSkillsSrc() {
+  // 1. Explicit local source (testing/offline).
+  if (process.env.KIRO_POWER_SRC) {
+    const src = path.join(process.env.KIRO_POWER_SRC, 'skills');
+    console.log(`Using local source: ${process.env.KIRO_POWER_SRC}`);
+    return { skillsSrc: src, tmpDir: null };
+  }
+
+  // 2. Local checkout — skills/ exists next to this script.
+  const localSkills = path.join(repoRoot, 'skills');
+  const localStat = await fs.stat(localSkills).catch(() => null);
+  if (localStat?.isDirectory()) {
+    return { skillsSrc: localSkills, tmpDir: null };
+  }
+
+  // 3. Remote — download from GitHub.
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'jfrog-kiro-'));
+  const ref = await resolveRef();
+  console.log(`Fetching ${REPO}@${ref} …`);
+  const { tar } = await fetchTarGz(REPO, ref);
+  const src = await extractTarToDir(tar, tmpDir);
+  return { skillsSrc: path.join(src, 'skills'), tmpDir };
 }
 
 // Only a bare host[:port] is accepted — no path, no userinfo, no shell metacharacters. On Windows,
@@ -113,33 +170,42 @@ async function main() {
   const workspace = process.argv.slice(2).includes('--workspace');
   const dest = resolveKiroDest({ workspace });
 
-  const { skills } = await installAdditive({
-    skillsSrc: path.join(repoRoot, 'skills'),
-    dest,
-  });
-  for (const name of skills) console.log(`  skill     ${name} -> ${path.join(dest, 'skills', name)}`);
+  const { skillsSrc, tmpDir } = await resolveSkillsSrc();
 
-  const mcpScope = workspace ? 'workspace' : 'global';
-  const mcpResult = provisionMcp({
-    scope: mcpScope,
-    onError: (msg) => process.stderr.write(`  mcp       error: ${msg}\n`),
-  });
-  if (mcpResult === 'added') {
-    console.log(`  mcp       jfrog -> ${resolvePlatformUrl(process.env.JFROG_PLATFORM_URL)} (OAuth, ${mcpScope} scope)`);
-  } else if (mcpResult === 'skipped') {
-    console.log('  mcp       jfrog skipped — entry already exists, leaving it untouched');
-  } else if (mcpResult === 'no-platform-url') {
-    console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
-  } else if (mcpResult === 'invalid-platform-url') {
-    console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL ("${process.env.JFROG_PLATFORM_URL}") is not a valid host; set it to just the platform hostname (e.g. my.jfrog.io) and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
-  } else if (mcpResult === 'error') {
-    console.log('  mcp       jfrog registration failed — see error above');
-  } else {
-    console.log('  mcp       skipped (kiro-cli not found on PATH) — install it, then run this again to add the JFrog MCP server');
+  try {
+    const stat = await fs.stat(skillsSrc).catch(() => null);
+    if (!stat?.isDirectory()) {
+      throw new Error(`skills/ missing in source (${skillsSrc})`);
+    }
+
+    console.log(`Installing skills -> ${path.join(dest, 'skills')}`);
+    const { skills } = await installAdditive({ skillsSrc, dest });
+    for (const name of skills) console.log(`  skill     ${name} -> ${path.join(dest, 'skills', name)}`);
+
+    const mcpScope = workspace ? 'workspace' : 'global';
+    const mcpResult = provisionMcp({
+      scope: mcpScope,
+      onError: (msg) => process.stderr.write(`  mcp       error: ${msg}\n`),
+    });
+    if (mcpResult === 'added') {
+      console.log(`  mcp       jfrog -> ${resolvePlatformUrl(process.env.JFROG_PLATFORM_URL)} (OAuth, ${mcpScope} scope)`);
+    } else if (mcpResult === 'skipped') {
+      console.log('  mcp       jfrog skipped — entry already exists, leaving it untouched');
+    } else if (mcpResult === 'no-platform-url') {
+      console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL is not set; set it and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
+    } else if (mcpResult === 'invalid-platform-url') {
+      console.log(`  mcp       jfrog skipped — JFROG_PLATFORM_URL ("${process.env.JFROG_PLATFORM_URL}") is not a valid host; set it to just the platform hostname (e.g. my.jfrog.io) and re-run, or: kiro-cli mcp add --name jfrog --url https://<host>/mcp --scope ${mcpScope}`);
+    } else if (mcpResult === 'error') {
+      console.log('  mcp       jfrog registration failed — see error above');
+    } else {
+      console.log('  mcp       skipped (kiro-cli not found on PATH) — install it, then run this again to add the JFrog MCP server');
+    }
+
+    console.log(`\nJFrog composes into any kiro-cli session now. Just run:  kiro-cli chat`);
+    console.log(`then ask a JFrog question (no --agent needed).`);
+  } finally {
+    if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true });
   }
-
-  console.log(`\nJFrog composes into any kiro-cli session now. Just run:  kiro-cli chat`);
-  console.log(`then ask a JFrog question (no --agent needed).`);
 }
 
 // Only run main() when executed directly (not when imported by tests).
