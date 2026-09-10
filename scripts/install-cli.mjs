@@ -1,25 +1,24 @@
 #!/usr/bin/env node
 // (c) JFrog Ltd. (2026)
 //
-// kiro-cli is a SEPARATE runtime from the Kiro IDE — it does not read ~/.kiro/powers/, so it cannot
-// consume the IDE power (POWER.md). Its additive mechanism is skills (~/.kiro/skills/): the default
-// agent auto-loads them and composes JFrog into ANY session — the default agent, or a user's own custom
-// agent (which inherits default skills). The skills carry the full JFrog knowledge plus the runnable
-// helper scripts and `/`-invoke, so they are the complete CLI capability on their own. Steering is the
-// IDE power's channel and is intentionally NOT copied here — the steering is generated from these same
-// skills, so shipping it too would advertise JFrog twice within one CLI session.
-// It never installs a replacement --agent (a kiro-cli --agent is singular per session).
+// Additive install of the JFrog integration for Kiro (IDE skills + kiro-cli).
+// Copies the JFrog skills into ~/.kiro/skills/ so JFrog composes into ANY kiro-cli session (the
+// default agent, or a user's own custom agent) and is accessible via slash commands in the IDE.
 //
-//   node scripts/install-cli.mjs               # additive: skills + MCP -> ~/.kiro (global)
-//   node scripts/install-cli.mjs --workspace   # additive: skills + MCP -> ./.kiro
+// Works from a local checkout or via npx (which bundles skills/ in the package):
+//   node scripts/install-cli.mjs               # from a checkout: skills + MCP -> ~/.kiro (global)
+//   node scripts/install-cli.mjs --workspace   # from a checkout: skills + MCP -> ./.kiro
+//   npx -y github:jfrog/jfrog-kiro-power       # no clone needed, all platforms (installs main branch)
 //
 // KIRO_HOME=<dir>  give the CLI its own profile (e.g. ~/.kiro-cli) instead of the default ~/.kiro, so
 // its skills never land where the IDE reads (see README "Running both surfaces on one machine").
 // Ignored with --workspace, which always scopes to ./.kiro regardless of KIRO_HOME.
 //
-// Dependency-free Node ESM; the skills copy touches no network (copies the local embedded files). The
-// MCP step shells out to the local `kiro-cli` binary only — no network call of its own either.
-import { promises as fs } from 'node:fs';
+// Options / env:
+//   --workspace                  install into ./.kiro/skills instead of ~/.kiro/skills
+//   KIRO_HOME=<dir>              custom Kiro home (ignored with --workspace)
+//   KIRO_POWER_SRC=<dir>         force local source from a specific directory (offline/testing)
+import { promises as fs, realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +59,16 @@ export async function installAdditive({ skillsSrc, dest }) {
   }
 
   return { skills, skillsDest };
+}
+
+// Resolve the skills source directory: KIRO_POWER_SRC env override, or skills/ next to this script
+// (present in both a local checkout and the npx-installed package).
+function resolveSkillsSrc() {
+  if (process.env.KIRO_POWER_SRC) {
+    console.log(`Using local source: ${process.env.KIRO_POWER_SRC}`);
+    return path.join(process.env.KIRO_POWER_SRC, 'skills');
+  }
+  return path.join(repoRoot, 'skills');
 }
 
 // Only a bare host[:port] is accepted — no path, no userinfo, no shell metacharacters. On Windows,
@@ -112,11 +121,15 @@ export function provisionMcp({ scope, env = process.env, exec = execFileSync, on
 async function main() {
   const workspace = process.argv.slice(2).includes('--workspace');
   const dest = resolveKiroDest({ workspace });
+  const skillsSrc = resolveSkillsSrc();
 
-  const { skills } = await installAdditive({
-    skillsSrc: path.join(repoRoot, 'skills'),
-    dest,
-  });
+  const stat = await fs.stat(skillsSrc).catch(() => null);
+  if (!stat?.isDirectory()) {
+    throw new Error(`skills/ missing in source (${skillsSrc})`);
+  }
+
+  console.log(`Installing skills -> ${path.join(dest, 'skills')}`);
+  const { skills } = await installAdditive({ skillsSrc, dest });
   for (const name of skills) console.log(`  skill     ${name} -> ${path.join(dest, 'skills', name)}`);
 
   const mcpScope = workspace ? 'workspace' : 'global';
@@ -143,6 +156,8 @@ async function main() {
 }
 
 // Only run main() when executed directly (not when imported by tests).
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpathSync resolves symlinks — npx creates a symlink in .bin/ on macOS/Linux, so without this
+// the comparison would fail and main() would never run.
+if (process.argv[1] && realpathSync(path.resolve(process.argv[1])) === fileURLToPath(import.meta.url)) {
   await main();
 }
