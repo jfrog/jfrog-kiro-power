@@ -67,7 +67,11 @@ node "~/.kiro/jfrog-scripts/jfrog-mcp-management/jfrog-agent-guard-env-probe.mjs
   chain: existing Agent Guard MCP entries (any harness config file per
   harness-common.md; `_JF_ARGS` → `project=`) →
   `JF_PROJECT` env var → ASK the user. If none resolves, STOP and ask — NEVER
-  guess, NEVER assume `default`, NEVER invent JFrog project keys.
+  guess, NEVER assume `default`, NEVER invent JFrog project keys. There is no
+  platform-wide / project-less mode: when you ask, explain a real key is
+  required, prompt once (you may suggest the resolved candidates), and never
+  offer a "no project" / "platform-wide" / "skip" option. If the key is
+  rejected, re-prompt once — do not fall back to a project-less call.
 
 - **`<SERVER_ID>` is auto-resolvable.** This extends the base skill's
   [server selection rules](the `#jfrog` steering)
@@ -620,6 +624,41 @@ troubleshooting in key-rules-and-troubleshooting.md.
 Cursor has no `enabledMcpjsonServers`-style precedence files — enable/disable is
 the UI toggle above. OAuth `--login` in a sandbox must run with `all`
 permissions (see runtime-permissions.md).
+
+## Sandbox network allowlist (Agents Window)
+
+**Trigger — do not apply this by default.** Only act on this once you actually
+see it: in a Cursor sandbox agent (`CURSOR_SANDBOX=seatbelt`, e.g. the Agents
+Window) an Agent Guard call can't reach a JFrog host — the Step 0 activation
+check can't reach the platform, and/or an `npx` / catalog call returns a `403`
+on a JFrog host. That's Cursor's sandbox network allowlist. A Step 0 network
+failure here is inconclusive — don't report the platform as disabled or abort.
+The gate uses `jf api` for a configured server and a direct request for
+environment-only credentials. After the host is allowlisted, re-run Step 0
+and follow its exit code. Do not bypass the gate.
+
+1. **Retry the same command once with `required_permissions: ["full_network"]`**
+   (see runtime-permissions.md).
+2. **If it 403s again, has no effect, or the param isn't on your Shell tool
+   (e.g. the Agents Window), go straight to the allowlist fallback below.** Do
+   NOT keep retrying `full_network`, and do NOT offer to run the command outside
+   the sandbox or ask the user to run it in their own terminal. Create or edit
+   `~/.cursor/sandbox.json` (user) or `.cursor/sandbox.json` (project)
+   yourself, adding the blocked host to the existing `allow` array if the file
+   already exists (don't overwrite it), then ask the user to reload the window.
+
+Allow whatever host the `403` names; JFrog usually also redirects the binary
+download to Amazon S3, so `*.s3.amazonaws.com` is typically needed too. SaaS:
+
+```json
+{ "networkPolicy": { "default": "deny", "allow": ["*.jfrog.io", "*.s3.amazonaws.com"] } }
+```
+
+Self-hosted (platform on your own domain):
+
+```json
+{ "networkPolicy": { "default": "deny", "allow": ["artifactory.example.com", "*.s3.amazonaws.com"] } }
+```
 
 
 ## harness-devin
@@ -1296,7 +1335,10 @@ row in harness-common.md.
 - **Network / proxy / DNS error** — outside the agent guard's scope; tell the
   user and stop. This is package-unreachable per
   [Classify npx @jfrog/agent-guard failures](#classify-npx-jfrogagent-guard-failures)
-  — never install the MCP by any other means as a workaround.
+  — never install the MCP by any other means as a workaround. Before stopping,
+  though: in a Cursor sandbox agent a `403` on a JFrog host is the sandbox
+  allowlist and has a concrete fix — see the "403 … in a Cursor sandbox agent"
+  entry below.
 - **npx package fetch returns 403 or 404** — usually a corporate proxy/VPN, a
   blocked or wrong registry, the JFrog registry being unreachable, or a
   curation policy — not a missing package. The default
@@ -1307,6 +1349,13 @@ row in harness-common.md.
   the access token is valid for that repo). Same hard-stop rule applies: do
   not fall back to the usual MCP install routes that skip the approved catalog
   and Agent Guard as the MCP proxy.
+- **403 (or a Step 0 network failure) in a Cursor sandbox agent (Agents
+  Window)** — Cursor's network allowlist. Retry once with
+  `required_permissions: ["full_network"]`; if it still 403s, has no effect, or
+  the param isn't on the Shell tool, create `~/.cursor/sandbox.json` (or the
+  project `.cursor/sandbox.json`) per the "Sandbox network allowlist" section in
+  harness-cursor.md. Do NOT keep retrying `full_network`
+  or punt to a manual/out-of-sandbox run.
 
 
 ## persisting-env-vars
