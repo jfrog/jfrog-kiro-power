@@ -12,12 +12,15 @@ description: "Deep reference material for the jfrog-init skill (API paths, schem
 
 `node ~/.kiro/jfrog-scripts/jfrog-init/jfrog-detect-all.mjs [server-id] [project-key]` runs Steps 1–7
 in order and stops at the first non-green result — except Step 5 going
-red/error, Step 6 going red (ambiguous/404/403), and Step 7 going red
+red/error, Step 5b going red/error, Step 6 going red (ambiguous/404/403), and Step 7 going red
 in either of its two non-blocking shapes (exit 1: catalog not hosted /
 unreachable / 5xx, or exit 4: reachable but not entitled), all of which
 are non-blocking: Steps 1-4 passing is what "green" means here,
-and the MCP-plugin, project-resolution, and catalog-availability gaps
-are each reported as separate signals. This script makes exactly one
+and the MCP-plugin, MCP-auth, project-resolution, and catalog-availability
+gaps are each reported as separate signals. Step 5b itself only runs when
+Step 5 came back green **and** `detectHarness()` returns `opencode` — every
+other harness authenticates MCP tools through `jf config` credentials
+directly, so there's nothing for it to check. This script makes exactly one
 project-resolution attempt per invocation and has no way to tell a
 first attempt from a last one, so it always treats a Step 6 red as
 non-blocking — the interactive walk (see Step 6 in `SKILL.md`) is what
@@ -30,18 +33,26 @@ picked project as arg 2 — unless that `ask` carries `"unresolved":
 "server"`, in which case it's a server pick (see Step 6's branches) and
 the re-invocation picks server-id (arg 1) instead.
 
-Exit 0 = Steps 1-4 green (MCP configured or not, project resolved
-or not, catalog entitled or not); exit 1 = something needs fixing. The
-final JSON line adds `mcpConfigured: true|false`, `projectResolved:
+Exit 0 = Steps 1-4 green (MCP configured or not, MCP token present or not,
+MCP server enabled or not, project resolved or not, catalog entitled or
+not); exit 1 = something needs fixing. The final JSON line adds
+`mcpConfigured: true|false`, `mcpAuthed: "ok" | "missing" |
+"not_applicable"`, `mcpResponding: true|false`, `projectResolved:
 true|false`, and `catalogEntitled: true|false` so a caller can tell the
 exit-0 cases apart — plus `catalogReason: "unreachable" | "not_entitled"`
-whenever `catalogEntitled` is `false`, so the Final Summary can name the
-specific gap instead of a generic one. Writes the `~/.jfrog/setup.json`
-state-file hint whenever Steps 1-4 are green, **regardless of
-`projectResolved`, `mcpConfigured`, or `catalogEntitled`** — the server
-and JPD URL are worth remembering on their own, independent of whether
-a project got picked, the MCP plugin is wired up, or the AI Catalog is
-reachable/the user is entitled to it. An unresolved project is passed
+whenever `catalogEntitled` is `false`, and `mcpRespondingReason:
+"not_enabled" | "unreachable"` whenever `mcpResponding` is `false`, so the
+Final Summary can name the specific gap instead of a generic one.
+`mcpAuthed` is `"not_applicable"` on every harness but OpenCode — there is
+no gap to report where the check never runs, and a boolean there would
+conflate "no gap" with "not checked". Writes the
+`~/.jfrog/setup.json` state-file hint whenever Steps 1-4 are green,
+**regardless of `projectResolved`, `mcpConfigured`, `mcpAuthed`,
+`mcpResponding`, or `catalogEntitled`** — the server and JPD URL are worth
+remembering on their own, independent of whether a project got picked, the
+MCP plugin is wired up, its auth token is present, the MCP server is
+enabled on the JPD, or the AI Catalog is reachable/the user is entitled to
+it. An unresolved project is passed
 to `jfrog-state-file.mjs` as an empty key, which leaves any previously
 recorded `currentActiveProject` alone rather than erasing it (see
 `jfrog-state-file.mjs`); it's never written as a fresh, unvalidated
@@ -120,6 +131,106 @@ both into one generic gap.
 **Never** grant a role or invent a project.
 
 
+## final-summary-rendering
+
+# Final summary — recap rendering rules
+
+**Give the user a short recap, not the raw checklist.** See
+"Customer-facing output" in `SKILL.md` — no step numbers, no raw JSON.
+Render a short, emoji-based checklist, not a prose paragraph or a
+five-line plain-text list. Three grouped lines cover all five checks:
+
+- **JF CLI & Config** — `jf` installed and connected to a server. Always
+  fully resolved here — this checklist only renders once every
+  prerequisite up through server connectivity has passed (see "Anything
+  else red" below for the alternative).
+- **JFrog MCP Plugin** — the MCP plugin check.
+- **Project & AI Catalog** — the project-resolution and AI-Catalog-access
+  checks, together.
+
+Skip the Node.js setup step — implementation detail, not user-facing.
+
+**Rules for the checklist:**
+1. Do **not** use the word "done" anywhere in it.
+2. Keep those checks in exactly these three grouped lines — never
+   expand back out to five.
+3. All three groups fully resolved → use this exact format, verbatim:
+
+   > ✨ **JFrog initialization complete!**
+   > ✅ JF CLI & Config
+   > ✅ JFrog MCP Plugin
+   > ✅ Project & AI Catalog
+
+4. A group with something outstanding gets ⚠️ instead of ✅, plus a
+   short fact after an em dash:
+
+   > ✨ **JFrog initialization complete!**
+   > ✅ JF CLI & Config
+   > ⚠️ JFrog MCP Plugin — not configured
+   > ✅ Project & AI Catalog
+
+   For the merged **Project & AI Catalog** line, if only one of the two
+   is outstanding name just that one; if both are, separate them with a
+   semicolon: `⚠️ Project & AI Catalog — project not set up yet; catalog
+   access not entitled`.
+
+5. **Step 8 gets a fourth checklist line, but only when it ran** —
+   nothing appears when it was skipped:
+   - **Success** — `✅ JFrog Marketplace`, plus this trailing sentence
+     after the checklist block, in this exact wording:
+
+     > Added the JFrog marketplace `<marketplace-name>` to Claude Code.
+     > Browse available plugins with `/plugins`, or install directly with
+     > `claude plugin install <plugin>@<marketplace-name>`
+
+   - **Red** — `⚠️ JFrog Marketplace — not registered`, and no trailing
+     sentence.
+
+**If the user asks why** (troubleshooting reference — not part of the render itself):
+
+Never phrase a ⚠️ line as a failure or as something the user needs to
+fix before continuing — all of them are non-blocking by design. The
+short fact after the em dash is the same underlying cause this skill
+has always surfaced, just worded without "pending":
+
+- **Step 5 red/error (MCP plugin not configured):** `not configured`.
+  If the user asks why or how to fix it, that's when the specific cause
+  from Step 5's `detail` comes in — either run
+  `jfrog-reinstall-jfrog-plugin.mjs` (see Step 5) for the per-harness
+  reinstall remedy, or point at resolving `jf config`, matching
+  whichever cause Step 5 actually reported.
+- **Step 5 MCP status** (only when the config check above is green) — the
+  **probe** decides, the only signal tied to *this* JPD:
+  - exit 4 → ⚠️ `not enabled on this JPD` (+ ask admin, docs from `detail`)
+  - exit 1 → ⚠️ `could not confirm it's enabled`
+  - exit 0 → MCP is on; check your session for JFrog MCP tools **on this JPD**
+    (same base URL, else they don't count): visible → ✅; else ⚠️ `enabled — sign
+    in to use it`, and offer sign-in **after the summary, never mid-walk**
+- **Step 5b red (OpenCode OAuth incomplete):** `not authenticated`. If
+  the user asks, that's when `opencode mcp auth jfrog` comes in.
+- **Step 6 hit its retry cap (no project resolved):** `project not set
+  up yet`. If the user asks, mention they can pick one whenever they're
+  ready. The server/JPD are still recorded to the state file either way
+  (see the persistence step at the top of `SKILL.md`'s Final summary
+  section); a project picked in an earlier walk, if any, is left as-is
+  rather than cleared.
+- **Step 7 returned exit 4 (not entitled):** `catalog access not
+  entitled`. If the user asks for the fix: ask your JFrog admin for the
+  "AI Catalog Read" role to browse or install MCPs from the catalog.
+- **Step 7 returned exit 1 (catalog not hosted / unreachable):**
+  `catalog not reachable on this JPD`. No fix instruction; there may be
+  nothing to fix (this JPD may simply not host the AI Catalog).
+- **Something happened this walk** (Node.js/`jf` CLI installed, `jf
+  config` connected, a project resolved in Step 6, an MCP placeholder
+  substituted in Step 5, etc.): still the same checklist — the action
+  itself isn't called out per-line, ✅ is ✅ regardless of whether it
+  needed fixing this walk.
+- **Anything else red** (Steps 1-4 not all green): one or two sentences
+  naming what's blocking and what to do next, no checklist — there's
+  nothing to check off yet. Include the raw detector error line if it
+  helps debug, without the JSON wrapper.
+
+
 ## flow-diagram
 
 # /jfrog-init — full flow diagram
@@ -192,7 +303,10 @@ flowchart TD
     ASKSRV5 --> S5
     S5 -->|missing/invalid/no entry, incl. substitution failure| F5["Note: reinstall or update the JFrog plugin, or resolve jf config (non-blocking)"]:::fixBox
     F5 --> S6
-    S5 -->|yes, valid url| S6
+    S5 -->|yes, valid url| S5R["5b. JFrog MCP server enabled on this JPD? (jfrog-detect-jfrog-mcp-responding.mjs, anonymous GET &lt;JPD&gt;/mcp — non-blocking)"]:::stepBox
+    S5R -->|not_enabled: ask admin / unreachable: couldn't confirm| F5R["Note: surface in Final Summary (non-blocking)"]:::fixBox
+    S5R -->|enabled: ✅ if signed in to this JPD, else offer sign-in AFTER Final Summary| S6
+    F5R --> S6
 
     S6["6. Project resolved?"]:::stepBox
     S6 -->|state file has current project| ASKREUSE["AskUserQuestion: reuse CURRENT or pick different"]:::fixBox
@@ -258,6 +372,82 @@ Step 5) before reaching for `AskUserQuestion` — if it's `kiro` or
 `kiro-cli`, skip the tool call entirely and use the plain-text fallback
 directly. Calling it anyway surfaces a "tool does not exist" error to
 the user before you fall back.
+
+
+## invoking-and-output-rules
+
+# Operating rules: silent walk, exit codes, and flow
+
+## Customer-facing output
+
+**The user does not need to see the checklist you are walking, but does
+need to see what actually happened.** Run the detectors silently,
+capture their output for your own reasoning, and surface only what the
+user needs to know or act on:
+
+- **Do not** narrate step numbers ("Step 1…", "moving to Step 3…")
+  while the walk is in progress.
+- **Do not** paste detector JSON, exit codes, or shell command output
+  into the reply.
+- **Do not** narrate the branch-selection reasoning behind an
+  `AskUserQuestion` or plain-text prompt — e.g. explaining that
+  `unresolved` wasn't `"server"`, or that `candidatesWithNames` had two
+  or more entries, so this is "the generic ask using the first two
+  candidates." That reasoning (in `server-picker.md`, `project-picker.md`,
+  and the other reference docs' branch tables) is written for you to
+  follow silently, not to summarize out loud — the field names in it are
+  never user-facing. The only output the user sees at an ask point is
+  the prompt itself.
+- **Do not** narrate whether the `AskUserQuestion` tool is available in
+  the current harness before falling back to the plain-text prompt
+  (e.g. "the AskUserQuestion tool isn't available here, I'll present
+  this as a plain question instead"). If it isn't available, silently
+  use the plain-text fallback already documented for that ask point.
+- **Do not** announce that you're about to run the checklist, or name
+  which check comes first — not even generically ("I'll run the setup
+  checklist silently, starting with the JFrog CLI check" is itself a
+  violation: it names a step while claiming to be silent). The same
+  applies to reading reference docs: "I'll start by reading the flow
+  docs" is a preamble. Silently means no preamble message at all — not
+  before running commands, not before reading files. Say nothing until
+  you have something the user needs to act on (an ask, a failing result)
+  or the final summary.
+
+Instead:
+
+- **When everything passes**, give a short recap in the final summary
+  (see SKILL.md's "Final summary" section): a short, emoji-based checklist — JF CLI
+  & Config, JFrog MCP Plugin, Project & AI Catalog — so the user sees
+  the end state of every check at a glance, not raw step numbers and
+  not the Node.js check (an implementation detail, not user-facing).
+- **When something fails**, say *what's wrong in plain English* and
+  *what the user needs to do next*, in one or two sentences. Show the
+  exact command they need to run (they must see what they're
+  approving).
+- **On failure, the raw detector error line is fair game** to include
+  verbatim as a debugging aid — one line, without the JSON wrapper.
+
+SKILL.md documents the flow **for you (the model)**, not for the user.
+
+## Invoking scripts: exit codes are signal, not failure
+
+Every detector command shown in SKILL.md signals a failure or an ask via a
+non-zero exit code, by design — append `; rc=$?; true` when invoking
+any of them. **`rc=$?` is not optional**: every Step's branch table
+in SKILL.md keys off the exit code, and a bare `; true` throws it away, so
+every failure and ask silently reads as success. **Read
+the `script-invocation` section of the `#jfrog-init-references` steering in full** before running any command
+in this walk — the exact pattern and why it's required, not optional
+background.
+
+## Flow
+
+**Follow this flow literally.** Every decision node is covered by a
+detector or fix script in SKILL.md; every user-facing prompt uses the exact
+wording documented in the corresponding step. Do not reorder, do not
+skip, do not narrate the diagram to the user. Read
+the `flow-diagram` section of the `#jfrog-init-references` steering for the full flowchart before starting a
+walk — the same logic as SKILL.md's Steps, drawn as a map.
 
 
 ## jf-cli-install-internals
@@ -741,12 +931,13 @@ All three follow `SKILL.md`'s Final summary rule 5, verbatim.
 
 Background for Step 5 of `/jfrog-init` (`SKILL.md`). The model doesn't
 need this to execute the step — `jfrog-detect-jfrog-mcp.mjs` handles
-detection and substitution and reports the result as JSON — but it's
-useful for debugging a red/error result or explaining what happened.
+detection, substitution, and (OpenCode only) writing a new entry, and
+reports the result as JSON — but it's useful for debugging a red/error
+result or explaining what happened.
 
-**Placeholder substitution.** The plugin sometimes ships an `mcp.json`
-where the JPD URL is a placeholder that would otherwise need to be
-resolved at runtime from an env var:
+**Placeholder substitution (Cursor / VS Code / Claude Code).** The
+plugin sometimes ships an `mcp.json` where the JPD URL is a placeholder
+that would otherwise need to be resolved at runtime from an env var:
 
 ```json
 {"mcpServers": {"jfrog": {"url": "https://${JFROG_PLATFORM_URL}/mcp"}}}
@@ -758,6 +949,17 @@ Codex's plugin ships the same idea in a different shape — no
 ```json
 {"jfrog": {"url": "https://<JFROG_PLATFORM_URL>/mcp"}}
 ```
+
+The VS Code plugin uses VS Code's own env-var syntax, with an `env:`
+prefix inside `${...}`:
+
+```json
+{"mcpServers": {"jfrog": {"type": "http", "url": "https://${env:JFROG_PLATFORM_URL}/mcp"}}}
+```
+
+The Copilot extension **does not** expand `${env:VAR}` before loading
+the MCP, so leaving the placeholder in place also silently fails to
+connect; Step 5 substitutes it the same way as the others.
 
 Because we have that URL sitting in `jf config`, and because leaving
 the placeholder in place means the MCP silently fails to load in the
@@ -775,18 +977,57 @@ placeholder pattern anywhere in the file, it calls
    into that one `url` string.
 3. Replaces in two passes — first a placeholder preceded by a scheme
    (`https://${...}`, where our own scheme would otherwise double up),
-   then a bare one. Each pass recognizes all three syntaxes: `${VAR}`,
-   `$VAR`, and Codex's `<VAR>`.
+   then a bare one. Each pass recognizes four syntaxes: `${VAR}`,
+   VS Code's `${env:VAR}`, bare `$VAR`, and Codex's `<VAR>`.
 4. Re-serializes the whole file (`JSON.stringify(parsed, null, 2)`) and
    writes atomically (temp file + rename) so a partial write cannot
    corrupt the file. Original formatting/whitespace elsewhere in the
    file is not preserved byte-for-byte.
 5. Is idempotent — subsequent runs find no placeholder and no-op.
 
-This is the only place `/jfrog-init` writes to a harness's plugin-owned
-`mcp.json` — with one further exception for Kiro CLI: ensuring a `jfrog`
-entry exists in `~/.kiro/settings/mcp.json`, which no plugin ships (see
-below). Everything else in Step 5 is read-only.
+This is the ONLY place `/jfrog-init` writes to the plugin-owned
+`mcp.json` for these three harnesses. Everything else in Step 5 is
+read-only for them — with two further exceptions: OpenCode and Kiro CLI
+(see below).
+
+**OpenCode is structurally different.** The JFrog OpenCode plugin
+(`@jfrog/opencode-jfrog-plugin`) ships no static `mcp.json` of its
+own — it injects an `mcp.jfrog` entry into OpenCode's in-memory config
+at startup, via a `config` hook, but **only when `$JFROG_PLATFORM_URL`
+is set**. `/jfrog-init` deliberately does not rely on that env var —
+the JPD URL is already known from `jf config`, the same as every other
+harness — so instead it writes the entry directly into the **user's
+own** OpenCode config file:
+
+```json
+{"mcp": {"jfrog": {"type": "remote", "url": "https://acme.jfrog.io/mcp", "enabled": true}}}
+```
+
+If the detector finds no `mcp.jfrog` entry at all (the expected steady
+state until this runs once), it calls `jfrog-write-opencode-mcp.mjs`,
+which:
+
+1. Parses the file as **strict JSON**. If that fails — most often
+   because it's an `opencode.jsonc` with comments, which a
+   `JSON.parse`/`JSON.stringify` round-trip would silently destroy —
+   it refuses to write and reports an error instead; Step 5 falls back
+   to a manual-paste instruction (see
+   `jfrog-reinstall-jfrog-plugin.mjs`'s OpenCode branch) rather than
+   risking comment loss.
+2. Never overwrites an existing `mcp.jfrog` entry — same behavior as
+   the plugin's own runtime injection, and it protects any manual
+   configuration the user already has.
+3. Reads the JPD URL from `jf config` (default server, or the one
+   passed as arg 2) and writes `{"type": "remote", "url": "<jpd>/mcp",
+   "enabled": true}` under `mcp.jfrog`.
+4. Re-serializes the whole file and writes atomically (temp file +
+   rename), same as the placeholder substituter.
+5. Is idempotent — subsequent runs find the entry already present and
+   no-op.
+
+This is the ONLY place `/jfrog-init` writes to the user's own OpenCode
+config, and the only Step 5 write that targets a file NOT owned by the
+plugin (there is no plugin-owned file for OpenCode to write to).
 
 **Per-harness plugin-owned config file:**
 
@@ -796,8 +1037,41 @@ below). Everything else in Step 5 is read-only.
 | VS Code      | `~/.vscode/agent-plugins/github.com/jfrog/vscode-plugin/plugin/.mcp.json` |
 | Claude Code  | `~/.claude/plugins/cache/<marketplace>/jfrog/<version>/.mcp.json` (glob) |
 | Codex        | `$CODEX_HOME/plugins/cache/codex-plugin/jfrog/<version>/.mcp.json` (glob → newest; `$CODEX_HOME` defaults to `~/.codex`) |
+| OpenCode     | *(no plugin-owned file — see above)* |
 | Kiro (IDE)   | `~/.kiro/powers/installed/jfrog-kiro-power/mcp.json` (stable path) |
 | Kiro CLI     | `~/.kiro/settings/mcp.json` — Kiro's own global MCP config, not shipped by any plugin, so the `jfrog` entry is **created or merged in** with a placeholder url, then substituted like every other row above |
+| Devin        | `~/.local/share/devin/cli/plugins/cache/github.com_jfrog_devin-plugin-<sha>/<version>/mcp.json` (glob → newest; the scan is restricted to slugs starting with `github.com_jfrog_devin-plugin-` so other Devin plugins that also ship an `mcp.json` can't be picked up by mistake) |
+
+**OpenCode's own config file** (not plugin-owned — this is the user's
+personal config). The global file (item 3 below) is **always** loaded by
+OpenCode; `$OPENCODE_CONFIG` / `$OPENCODE_CONFIG_DIR` each add a second
+file merged on top of it — they do **not** replace it (see
+[harness-opencode.md](the `harness-opencode` section of the `#jfrog-mcp-management-references` steering)).
+`$OPENCODE_CONFIG` is honored as the write target (the file must already
+exist on disk — start OpenCode once to initialize it):
+
+1. `$OPENCODE_CONFIG`, if set (an explicit file path override).
+2. `$OPENCODE_CONFIG_DIR/opencode.json[c]`, if `$OPENCODE_CONFIG_DIR` is set.
+3. `~/.config/opencode/opencode.json` (or `.jsonc`, if that's the one
+   that already exists) otherwise — the global file OpenCode always loads
+   (honors `$XDG_CONFIG_HOME`). Not a macOS/Linux-only example: neither
+   OpenCode nor this resolver translates it on Windows, so the literal
+   path there is `homedir()\.config\opencode\opencode.json` (e.g.
+   `C:\Users\<user>\.config\opencode\opencode.json`) — no `%APPDATA%`.
+   Confirmed live on Windows: a fresh install's first run creates exactly
+   that path (as `opencode.jsonc`, its default first-run format).
+
+Whenever the write target picked from 1 or 2 above isn't the global file
+itself, `jfrog-resolve-mcp-config.mjs` also returns the global file as
+`layerPaths`, and `jfrog-detect-jfrog-mcp.mjs` checks it for an existing
+`mcp.jfrog` entry before writing — deferring to that entry instead of
+writing a second one into the override file, which OpenCode's merge would
+otherwise let shadow it.
+
+Project-scope `opencode.json` (in the project root) is deliberately
+**never** used — a project config is often committed to git, and writing
+a `jfrog` MCP entry into a file the user might share is a different
+action than writing to a personal, git-ignored config.
 
 The Kiro CLI merge is additive and never destructive: the file normally
 holds the user's other MCP servers, so a `jfrog` entry that already has a
@@ -807,28 +1081,33 @@ stays a symlink, and a file that isn't valid JSON is reported rather than
 rewritten.
 
 Harness detection (in priority order): `CODEX_SANDBOX` / `CLAUDECODE` /
-`CURSOR_TRACE_ID` / `VSCODE_PID` / `TERM_PROGRAM`. Override with
-`JFROG_INIT_HARNESS=claude|cursor|vscode|codex|kiro|kiro-cli` or a
-specific file via `JFROG_INIT_MCP_CONFIG=/abs/path`. Neither Kiro target
-has an auto-detect signal yet — both are reachable only via the
-`JFROG_INIT_HARNESS=kiro` / `kiro-cli` overrides.
+`CURSOR_TRACE_ID` / `OPENCODE` / `OPENCODE_SESSION_ID` / `VSCODE_PID` /
+`TERM_PROGRAM`. Override with
+`JFROG_INIT_HARNESS=claude|cursor|vscode|codex|opencode|kiro|kiro-cli|devin`
+or a specific file via `JFROG_INIT_MCP_CONFIG=/abs/path`. Kiro / Kiro CLI /
+Devin have no auto-detect signal, and the Copilot extension runtime
+may sanitize VS Code's env vars from the plugin subprocess — all four
+are reachable via the matching `JFROG_INIT_HARNESS=...` override,
+exported from Step 5 in `SKILL.md`.
 
 `SKILL.md`'s Step 5 already has you export `JFROG_INIT_HARNESS=kiro` /
-`kiro-cli` up front when you're running as one of those two — before
-the detector ever runs, so Exit 3 below isn't the trigger for it.
+`kiro-cli` / `vscode` / `devin` up front when you're running as one of
+those targets — before the detector ever runs, so Exit 3 below isn't
+the trigger for it.
 
 **What the detector verifies** (three things):
 
-1. Plugin file exists and is non-empty at its harness-specific path.
+1. Config file exists and is non-empty at its harness-specific path.
 2. Parses as valid JSON.
-3. Contains a `jfrog` entry (nested under `mcpServers` on every harness
-   but Codex, which has no wrapper) with a non-empty `url`.
+3. Contains a `jfrog` entry (`mcpServers.jfrog` on Cursor/VS Code/Claude
+   Code, bare top-level `jfrog` on Codex, `mcp.jfrog` on OpenCode) with
+   a non-empty `url`. An entry that exists but has a missing or empty
+   `url` also causes a red — fix or remove the entry and re-run.
 
 It does NOT enforce any other `type`/`url` shape (each plugin owns its
-own schema) and it does NOT probe the endpoint — a mis-configured MCP
-endpoint surfaces immediately the first time the user invokes it, and
-the walk's other network checks (Steps 4, 7) already prove the JPD is
-reachable.
+own schema), and does NOT probe the endpoint — whether the server is
+actually enabled on the JPD is a separate, network check (see
+"MCP-responding probe" below).
 
 **Step 5 branches, required behavior:**
 
@@ -836,14 +1115,14 @@ reachable.
 - **Exit 1 (red)** or **Exit 3 (error)** → **non-blocking** — proceed
   to Step 6 as if green, but remember the cause for the Final Summary.
   Steps 6 and 7 call the JPD's REST APIs directly with `jf config`
-  credentials, never through the JFrog MCP, so a broken or
-  missing plugin `mcp.json` doesn't affect whether those checks are
-  accurate — there's nothing to gain by stopping the walk over it.
-  Tell the red causes apart from the detector's `detail` for the
-  Final Summary note:
-  - Plugin file missing / empty / lacks a valid `jfrog` entry. Fix:
-    **reinstall or update the JFrog plugin.** If the user asks why or
-    how to fix it, run:
+  credentials, never through the `jfrog` MCP entry, so a broken or
+  missing config doesn't affect whether those checks are accurate —
+  there's nothing to gain by stopping the walk over it. Tell the
+  causes apart from the detector's `detail` for the Final Summary
+  note:
+  - **(Cursor / VS Code / Claude Code / Codex / Kiro IDE)** Plugin file
+    missing / empty / lacks a valid `jfrog` entry. Fix: **reinstall or
+    update the JFrog plugin.** If the user asks why or how to fix it, run:
 
     ```bash
     node "${CLAUDE_SKILL_DIR}/scripts/jfrog-reinstall-jfrog-plugin.mjs"; true
@@ -851,36 +1130,114 @@ reachable.
 
     and relay its per-harness remedy — it only diagnoses and prints,
     never writes to the plugin's mcp.json.
-  - Plugin file has a placeholder and automatic substitution failed
-    with no url set for the resolved server-id. Fix: **resolve `jf
-    config`**. Reinstalling the plugin does not fix this.
-  - Kiro CLI only: it could not create or update its own
-    `~/.kiro/settings/mcp.json` — no plugin ships this file, so there's
-    nothing to reinstall. The detail names the actual cause (e.g. the
-    parent path blocked by a non-directory, or a permissions error).
-    Fix: **correct the file or parent-directory permissions/path**,
-    then re-run.
-  - (Exit 3 only) Harness could not be detected, or plugin file is
+  - **(Cursor / VS Code / Claude Code)** Plugin file has a placeholder
+    and automatic substitution failed with no url set for the resolved
+    server-id. Fix: **resolve `jf config`**. Reinstalling the plugin
+    does not fix this.
+  - **(OpenCode)** Config has no `mcp.jfrog` entry and the automatic
+    write failed — either no `jf` server resolvable (fix: **resolve
+    `jf config`**) or the file isn't strict JSON (fix: **paste the
+    entry in manually** — run `jfrog-reinstall-jfrog-plugin.mjs` for
+    the exact JSON to paste and where).
+  - **(Kiro CLI)** Could not create or update `~/.kiro/settings/mcp.json`
+    — no plugin ships this file, so there's nothing to reinstall. The
+    detail names the actual cause. Fix: **correct the file or
+    parent-directory permissions/path**, then re-run.
+  - (Exit 3 only) Harness could not be detected, or the config file is
     invalid JSON / unreadable. Show the raw detector error in the note.
     **Do not react to this by guessing a harness or trying
     `JFROG_INIT_HARNESS` values to see what resolves it.** If this is
-    Kiro or Kiro CLI, the override was already exported before the
-    detector's first run (top of Step 5), so it should not reach Exit
-    3 for that cause at all. Otherwise this is Exit 3, non-blocking
+    Kiro, Kiro CLI, or Copilot in VS Code, the override was already
+    exported before the detector's first run (top of Step 5), so it
+    should not reach Exit 3 for that cause at all. Otherwise this is
+    Exit 3, non-blocking
     like every other cause above: note it and move on to Step 6 in the
     same turn, with zero visible pause — do not stop to read this file
     or any other reference doc over it.
-- **Exit 2 (`ask`)** → the one outcome that still blocks: placeholder
-  present, but the jf server-id is ambiguous — every step from here on
-  needs a resolved server-id, so there's nothing to skip ahead to.
-  **Stop and read the `server-picker` section of the `#jfrog-init-references` steering in full**, then
-  re-invoke with the pick as the positional argument.
+- **Exit 2 (`ask`)** → the one outcome that still blocks: a fix needs
+  the jf server-id (placeholder substitution on Cursor/VS Code/Claude
+  Code, or the initial write on OpenCode/Kiro CLI) but it's ambiguous —
+  every step from here on needs a resolved server-id, so there's nothing
+  to skip ahead to. **Stop and read the `server-picker` section of the `#jfrog-init-references` steering in
+  full**, then re-invoke with the pick as the positional argument.
 
 **Note on Claude Code**: today the released Claude JFrog plugin does
 not include a `.mcp.json` in its shipped tree, so Step 5 goes red on
 Claude Code until the plugin ships one — this no longer stops the
 walk, but the Final Summary still notes it. Never fall back to
 project-scope `.mcp.json`.
+
+## Step 5b (OpenCode only) — MCP auth token
+
+Step 5 wires the `mcp.jfrog` *address*; OpenCode's `"type": "remote"` entry
+also needs its own OAuth token before MCP tools work. That token lives in
+`~/.local/share/opencode/mcp-auth.json` (honors `$XDG_DATA_HOME`), keyed
+by server name (`jfrog`), managed by OpenCode — never by this skill. Same
+un-translated path on Windows (`homedir()\.local\share\opencode\mcp-auth.json`,
+no `%LOCALAPPDATA%`) — see the config-path note above. The parent directory
+(`.local\share\opencode`) is confirmed live on Windows, holding OpenCode's
+db/log/repos; the `mcp-auth.json` file itself only appears after an actual
+OAuth handshake, not from an install alone, so its exact path is inferred
+from source (`packages/opencode/src/mcp/auth.ts` in `anomalyco/opencode`),
+not observed directly.
+
+A non-empty `jfrog` key in that file is **not** proof of a working credential:
+OpenCode writes PKCE state there *before* the browser redirect and only adds
+`tokens.accessToken` once the OAuth callback completes. A user who started
+but never finished the browser login is left with a key but no token.
+`jfrog-detect-opencode-mcp-auth.mjs` checks `tokens.accessToken` specifically.
+
+The auth command is interactive (opens a browser, blocks up to 60s) — no
+non-interactive form exists. The script is read-only; the fix is always
+the user running `opencode mcp auth jfrog` themselves.
+
+**Exit codes:** 0 = token present; 1 = missing or incomplete (tell user to
+run `opencode mcp auth jfrog`, non-blocking); 3 = file unreadable/invalid
+JSON (non-blocking, note in Final Summary). Never runs on Cursor/VS
+Code/Claude Code — those use `jf config` credentials directly.
+
+## MCP-responding probe — is the server enabled on this JPD?
+
+The config check proves the plugin's `mcp.json` is wired up, not that a
+Platform Admin has **enabled** the JFrog MCP server. An enabled endpoint is
+OAuth-protected (it answers a Bearer challenge); until an admin enables it,
+`<JPD>/mcp` has no challenge — a bare 403 on SaaS, or 404 self-managed.
+After the config check, run once:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/jfrog-detect-jfrog-mcp-responding.mjs" "[server-id]"; rc=$?; true
+```
+
+No result here stops `/jfrog-init` — the walk always finishes, and it never
+pauses for MCP sign-in mid-way; any sign-in offer waits until **after the Final
+Summary**. When the config check was green, the **probe decides** the Final
+Summary's **JFrog MCP Plugin** line, because it is the only signal tied to
+*this* JPD.
+
+> Note: the JFrog MCP tools you can see may belong to a *different* JPD (you can
+> be signed in to JPD-A while probing JPD-B), so they confirm sign-in only when
+> they target *this* JPD's base URL, and **never** turn a `not_enabled` or
+> `unreachable` probe green.
+
+- **Exit 4 (`not_enabled`)** → `not enabled on this JPD`, plus the fix from the
+  detector's `detail` (*ask your JFrog platform admin to enable it*, with the
+  docs link `https://docs.jfrog.com/integrations/docs/enable-the-jfrog-mcp-server`).
+- **Exit 1 (`unreachable`)** → `could not confirm it's enabled`. Often transient
+  (proxy / VPN / timeout); re-run to recheck.
+- **Exit 0 (`enabled`)** → this JPD's MCP is on. Read sign-in from your session's
+  JFrog MCP tools (they count only for *this* JPD — see the note above):
+  - **Tools available and for this JPD** (same base URL) → green (signed in).
+  - **Not available, `needsAuth`, or not confirmably this JPD** → the summary
+    line is `enabled — sign in to use it`. Step 5 is non-blocking, so do **not**
+    open the browser here — offer to sign in only **after the Final Summary**
+    (the walk's one browser action, and its last). If the user accepts, trigger
+    the JFrog MCP's own sign-in through your harness's MCP auth, then follow up:
+    tools now visible → connected; still not visible → reload the window to load
+    them (expected — don't ask an already signed-in user to sign in again).
+
+The result is in `jfrog-detect-all.mjs`'s summary as `mcpResponding`
+(with `mcpRespondingReason` on the non-green cases). The auth-status read
+above is an agent-level check, not part of that script's output.
 
 
 ## node-install-prompt
@@ -957,6 +1314,34 @@ resolving) — or `winget` missing/failing on Windows — falls back to
 today's plain message: tell the user to install Node.js ≥ 18 using
 whichever method they prefer, then re-run `/jfrog-init`. Do not retry
 automatically and do not try a second install method.
+
+
+## out-of-scope
+
+# Non-goals (out of scope for this skill)
+
+- Installing the JFrog IDE plugin, or replacing its auto-config.
+- Installing the VS Code hook.
+- A first-MCP wizard for an empty catalog.
+- Persisting the picked **project key** to `JF_PROJECT` or any shell
+  profile. Step 6 asks every walk and threads the pick forward as a
+  positional argument only — nothing about project selection ever
+  touches a shell profile. (Two other, unrelated things in this walk
+  *do*: Step 1's `nvm`-based Node install, and Step 2's Plan C fallback
+  when npm itself isn't usable — both append one PATH line to the
+  user's shell rc file, disclosed up front in the install consent
+  prompts, see `node-install-prompt.md` / `jf-cli-install-prompt.md`.
+  Plans A/B of Step 2 — the common case — don't touch a shell profile
+  at all, relying on npm's own global bin directory instead.)
+- Granting AI Catalog roles/permissions — Step 7 only instructs.
+- Storing access tokens to disk, logging them, or printing them.
+  Step 4's authenticated check keeps the credential inside `jf`'s own
+  process (`jf rt ping`); Steps 6 and 7 extract it from `jf config
+  export` only in memory, for one `fetch` call. Step 3/4's token-based
+  `jf config` path (see the `jf-config-auth-picker` section of the `#jfrog-init-references` steering) never
+  touches this skill or the model at all — the user runs that command
+  themselves. **Step 8 is the one deliberate exception** — it writes
+  the token to `~/.netrc`; see the `marketplace-setup` section of the `#jfrog-init-references` steering.
 
 
 ## project-matching
@@ -1284,13 +1669,40 @@ node --version; true
 npx --version; true
 ```
 
+## PowerShell hosts
+
+Some harnesses run Bash-tool commands through native PowerShell, not a
+POSIX shell (OpenCode on Windows is one) — there, `$?` isn't a numeric
+exit code and bare `true` doesn't exist, so `; rc=$?; true` throws
+`CommandNotFoundException`. Use the PowerShell equivalent instead:
+
+```powershell
+node "${CLAUDE_SKILL_DIR}/scripts/jfrog-detect-jf-cli.mjs"; $rc=$LASTEXITCODE; exit 0
+```
+
+`$LASTEXITCODE` is PowerShell's `$?`; `exit 0` plays `true`'s role.
+Swap this suffix in for every detector call when the Bash tool is
+PowerShell-backed — this is a shell property, not an OS one (Claude
+Code's Bash tool is a real POSIX shell even on Windows).
+
+The bare-`; true` commands above (`node --version`, `npx --version`, and
+`jfrog-reinstall-jfrog-plugin.mjs`) hit the same `true`-doesn't-exist
+problem, since nothing there needs `$rc` captured — swap in a bare `;
+exit 0` instead:
+
+```powershell
+node --version; exit 0
+npx --version; exit 0
+```
+
 ## What's deliberately not pre-approved
 
-`allowed-tools` in `SKILL.md` covers `node --version`, the six read-only
+`allowed-tools` in `SKILL.md` covers `node --version`, the seven read-only
 detectors named individually — `node
 "${CLAUDE_SKILL_DIR}/scripts/jfrog-detect-catalog-runtime.mjs"`,
 `jfrog-detect-jf-cli.mjs`, `jfrog-detect-jf-config.mjs`,
-`jfrog-detect-jfrog-mcp.mjs`, `jfrog-detect-project.mjs`, and
+`jfrog-detect-jfrog-mcp.mjs`, `jfrog-detect-jfrog-mcp-responding.mjs`,
+`jfrog-detect-opencode-mcp-auth.mjs`, `jfrog-detect-project.mjs`, and
 `jfrog-detect-server-ping.mjs` — and `node
 "${CLAUDE_SKILL_DIR}/scripts/jfrog-re*.mjs"` (the purely diagnostic
 `jfrog-reinstall-jfrog-plugin.mjs` and the two `jfrog-resolve-*.mjs`
@@ -1314,18 +1726,18 @@ lookups), `node
   itself writes `~/.jfrog/setup.json` on overall green (see the Final
   summary in `SKILL.md`), the same mutation `jfrog-state-file.mjs set`
   is excluded below for. PR review caught this; the fix was to enumerate
-  the six read-only detectors by exact filename instead of a wildcard,
+  the seven read-only detectors by exact filename instead of a wildcard,
   which also closes a path-traversal-shaped concern with the wildcard
   form (`jfrog-detect-*.mjs` has no anchor stopping `*` from matching
   path separators, unlike an exact filename).
-- `jfrog-substitute-mcp-placeholders.mjs` (the one script that edits the
-  plugin's `mcp.json` in place — see `mcp-plugin-config.md`). **Unlike
-  every other entry in this list, this exclusion is theoretical, not
-  operative**: `SKILL.md` never invokes this script as a standalone
+- `jfrog-substitute-mcp-placeholders.mjs` (edits the plugin's `mcp.json`
+  in place — see `mcp-plugin-config.md`). **Unlike every other entry in
+  this list, this exclusion is theoretical, not operative**: `SKILL.md`
+  never invokes this script as a standalone
   `node "${CLAUDE_SKILL_DIR}/scripts/jfrog-substitute-mcp-placeholders.mjs"`
   Bash command, so its absence from `allowed-tools` never actually
   gates anything. Its only real call site is the in-process import in
-  `jfrog-detect-jfrog-mcp.mjs` (itself one of the six explicitly-named
+  `jfrog-detect-jfrog-mcp.mjs` (itself one of the seven explicitly-named
   detectors above) — the harness's permission system approves Bash
   commands, not the function calls a pre-approved script makes once
   running, so the mutation executes with no prompt whenever Step 5 finds
@@ -1357,12 +1769,15 @@ and web-login already sit behind their own `AskUserQuestion` consent
 prompt, so the user has agreed before either runs.
 
 `jfrog-install-jf-cli.mjs`, `jfrog-substitute-mcp-placeholders.mjs`,
-`jfrog-state-file.mjs set`, and `jfrog-add-claude-marketplace.mjs` are
-excluded for a related but distinct reason: they're the four scripts in
-this directory that mutate something outside their own process (a
-downloaded binary made executable and run, the plugin's `mcp.json`, the
-setup state file, and `~/.netrc` plus Claude Code's own marketplace
-config, respectively) rather than just reading state and emitting JSON.
+`jfrog-write-opencode-mcp.mjs`, `jfrog-state-file.mjs set`, and
+`jfrog-add-claude-marketplace.mjs` are excluded for a related but
+distinct reason: they're the five scripts in this directory that mutate
+something outside their own process (a downloaded binary made executable
+and run, the plugin's `mcp.json`, the user's own OpenCode config — the
+first mutation targeting a personal file rather than a plugin-owned one
+— the setup state file, and `~/.netrc` plus Claude Code's own
+marketplace config, respectively) rather than just reading state and
+emitting JSON.
 A prior version of this grant covered every `*.mjs` in `scripts/`
 indiscriminately — PR review on this same branch pointed out that
 pre-approves running any of these without the model (or a
@@ -1397,7 +1812,13 @@ either is used — so the two are guaranteed byte-for-byte identical
 regardless of how deep the real install path is
 (`~/.agents/skills/jfrog-init`, several directories deeper under a
 Cursor plugin cache path, a `dev/dev-symlinks.sh` dev symlink, etc.),
-never something the model has to resolve itself.
+never something the model has to resolve itself. On a harness that
+doesn't substitute it (Cursor, Codex, OpenCode), a model that forgets
+to replace it fails silently rather than loudly: both bash and
+PowerShell expand an unset `${CLAUDE_SKILL_DIR}` to `""`, so the
+command's path quietly collapses to a wrong one (e.g. `Cannot find
+module '/scripts/jfrog-detect-jf-cli.mjs'`) instead of erroring on the
+substitution itself.
 
 That guarantee is also why each pattern below anchors on a literal
 `node "${CLAUDE_SKILL_DIR}` immediately, e.g. `Bash(node
@@ -1435,21 +1856,21 @@ Bash patterns are inherently fragile in general and recommend
 PreToolUse hooks for anything that needs a hard guarantee — not
 available to a skill shipped as a plain directory. Treat this anchor as
 a real improvement, not a proof of soundness against every possible
-`node` flag combination. And treat it as Claude-Code-specific: Cursor
-doesn't consult `allowed-tools` for Bash approval at all (a separate
-mechanism, `.cursor/cli.json`'s own `Shell(...)` rules), so every
-command in this file still raises its own prompt there regardless of
-how this pattern is written.
+`node` flag combination. And treat it as Claude-Code-specific: neither
+Cursor nor Codex consults `allowed-tools` for Bash approval at all
+(Cursor has its own separate mechanism, `.cursor/cli.json`'s
+`Shell(...)` rules), so every command in this file still raises its
+own prompt there regardless of how this pattern is written.
 
 So expect the harness to raise its own approval prompt for every case
-listed at the top of this section — **except `jfrog-substitute-mcp-placeholders.mjs`**,
-whose mutation runs unattended via the in-process call from
-`jfrog-detect-jfrog-mcp.mjs` as documented above. Both outcomes are
-intended. Do not treat either as a misconfiguration, and do not suggest
-widening `allowed-tools` to silence the prompts, or adding a standalone
-`allowed-tools` entry for the substituter to "fix" its silence — that
-would just pre-approve a second, redundant call path into the same
-mutation.
+listed at the top of this section — **except `jfrog-substitute-mcp-placeholders.mjs`
+and `jfrog-write-opencode-mcp.mjs`**, both of which run unattended via
+in-process calls from `jfrog-detect-jfrog-mcp.mjs` as documented above.
+All outcomes are intended. Do not treat any of them as a misconfiguration,
+and do not suggest widening `allowed-tools` to silence the prompts, or
+adding standalone `allowed-tools` entries for the substituter or writer
+to "fix" their silence — that would just pre-approve a second, redundant
+call path into the same mutations.
 
 
 ## server-picker
