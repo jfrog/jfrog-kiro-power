@@ -33,7 +33,7 @@ publicly accessible Releases Artifactory instance. It allows anonymous access
 and hosts Agent Guard releases.
 
 Canonical invocation (every catalog / login command; never omit `--registry`):
-`npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard`
+`npx --yes --registry "<REGISTRY_URL>" @jfrog/agent-guard`
 
 `@jfrog/agent-guard` is not published to the public npm registry; resolve it
 with `--registry <REGISTRY_URL>` above rather than the default npm registry.
@@ -150,6 +150,43 @@ Plain `${VAR_NAME}`, resolved from the shell that launched Claude Code. For
 `Bearer` headers: `"Bearer ${TOKEN}"`. The user must export the variable in the
 launching shell (see persisting-env-vars.md); values
 are picked up on next launch. Never write a raw secret — always `${VAR}`.
+
+## Gateway entry shape
+
+Use this shape ONLY when Step 2's `--inspect` output carried
+`routing.target: "gateway"` and a non-empty `routing.url`. In every other case,
+whatever the output looked like, write the Agent Guard entry from
+harness-common.md instead, exactly as you would if this
+section did not exist. Never infer this from a URL that looks like a Gateway
+URL.
+
+```json
+{
+  "mcpServers": {
+    "<spec.packageName>": {
+      "type": "http",
+      "url": "<routing.url, copied verbatim>"
+    }
+  }
+}
+```
+
+- The entry **key** is the raw, unencoded `spec.packageName` — the same key the
+  Agent Guard entry uses.
+- `url` is `routing.url` copied verbatim. Never build it, never normalise it,
+  never re-encode it, never append a path. It always points at the tenant's own
+  JFrog Platform. A `%2F` in the URL is correct and must be written through
+  unchanged.
+- No `command`, no `args`, no `env`, no `${VAR}` — the Gateway holds the
+  upstream credential, so there is nothing for the user to export. A `${VAR}` in
+  a Gateway entry is a bug.
+- Skip Install Step 5 (`--login`): OAuth runs between Claude Code and the
+  Gateway on first use, not against the upstream.
+- Enable, Restart and Verify are unchanged, including the ≥1-tool criterion.
+- Write the entry in every case — never stop the add over a managed policy.
+  After writing it, tell the user: managed Claude settings must list the copied
+  `serverUrl` in `allowedMcpServers`; if that list does not include the URL,
+  Claude Code rejects the server on first use.
 
 ## Enable
 
@@ -508,7 +545,12 @@ case; harnesses whose config is not JSON differ — e.g. **Codex** uses TOML wit
 ```
 
 - `"type": "stdio"` always — never `"http"`, `"sse"`, or a top-level `"url"`
-  (those bypass the Agent Guard).
+  (those bypass the Agent Guard) — **unless your harness file defines a
+  "Gateway entry shape" and `--inspect` returned `routing.target: "gateway"`
+  with a non-empty `routing.url`.**
+  That entry points at the tenant's own JFrog Platform, which applies the same
+  approval and tool policy the Agent Guard would, so it is not a bypass. Every
+  other remote entry remains forbidden.
 - `--yes` and `--registry <URL>` MUST precede `@jfrog/agent-guard` in `args`.
 - `--server <ID>` in `args` is conditional: drop both array elements only on
   the URL+token env path (`JFROG_URL`+`JFROG_ACCESS_TOKEN`, or legacy
@@ -1209,15 +1251,19 @@ Reference for the Install and List flows of the `jfrog-mcp-management` skill.
   Capitalizing the brand (`@JFrog`) points at a different/nonexistent scope and
   breaks the command. Use the exact lowercase string in every command and config
   entry.
-- **`npx` arg order:** `--yes`, `--registry <REGISTRY_URL>`, `@jfrog/agent-guard`, then
+- **`npx` arg order:** `--yes`, `--registry "<REGISTRY_URL>"`, `@jfrog/agent-guard`, then
   agent guard flags. Canonical invocation:
-  `npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard`. Both `--yes` and
+  `npx --yes --registry "<REGISTRY_URL>" @jfrog/agent-guard`. Both `--yes` and
   `--registry` MUST precede the package name or `npx` falls back to the default
   registry (404) and may block on a no-TTY prompt.
 - **Always `"type": "stdio"`** pointing at
-  `npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard`, even for
+  `npx --yes --registry "<REGISTRY_URL>" @jfrog/agent-guard`, even for
   remote-only catalog MCPs (the agent guard proxies them). `"http"`, `"sse"`,
-  or a top-level `"url"` bypass the agent guard.
+  or a top-level `"url"` bypass the agent guard. **One exception:** when
+  `--inspect` returned `routing.target: "gateway"` with a non-empty
+  `routing.url` and your harness file defines a Gateway entry shape, write that
+  shape — it points at the tenant's own JFrog Platform, not at a third party,
+  so nothing is bypassed. Never write a remote entry on any other basis.
 - `_JF_ARGS` is **only** for the config entry the agent launches at session
   start (the `env` of the entry written when adding an MCP); MUST contain
   `project=<JFROG_PROJECT_KEY>&mcp=<PACKAGE_NAME>`. NEVER pass `_JF_ARGS` to
@@ -1263,7 +1309,7 @@ Show the error verbatim. Ignore `npm warn` noise — except `npm warn invalid
 config registry=…`, which names the cause of a self-inflicted E404. Match
 **one** bucket from stderr. Fingerprints below are the live strings; if a
 match fails, re-check
-`npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard --version` rather
+`npx --yes --registry "<REGISTRY_URL>" @jfrog/agent-guard --version` rather
 than assuming a pinned release. A **hard stop** means: do not fall back to
 the usual MCP install routes that skip the approved catalog and Agent Guard
 as the MCP proxy.
@@ -1311,6 +1357,21 @@ row in harness-common.md.
        (agent guard stderr will show the spawn error).
   2. Verify that the MCP server is still allowed. See the skill's "Available to
      install" flow.
+- **An MCP was installed as a `stdio` Agent Guard entry although Gateway
+  routing is expected** — this is the designed fallback, not a failure.
+  `--inspect` returns anything other than
+  `routing.target: "gateway"` for every non-Gateway outcome, and the skill then
+  writes the standard stdio Agent Guard entry. Which outcomes those are is
+  `--inspect`'s to decide, not this skill's. The same fallback is taken when
+  `routing.url` is empty, or when the harness file defines no Gateway entry
+  shape — an MCP whose `routing.target` is `"gateway"` still installs as stdio
+  on those harnesses. The fallback entry is an ordinary Agent Guard entry, so
+  it works **only** with its inputs: Install Steps 3 and 4a run in full on that
+  path, and the required values must be collected and exported as for any other
+  stdio install. If a developer explicitly asks
+  why, the reason is on stderr: re-run the Step 2 `--inspect` command with
+  `JF_AGENT_GUARD_LOG_LEVEL=debug` exported and read the single eligibility
+  record it prints. Never paste an access token from that output.
 - **Configured server missing from the harness's list/verify view** —
   rejected/pending. Re-run the enable/verify step (Install → Step 4a).
 - **MCP still appears as approved (or won't go away) after editing the config**
@@ -1453,15 +1514,17 @@ in play before writing to it:
 
 # Runtime permissions
 
-The Step 0 Agent Guard check and the agent guard commands make outbound HTTPS
-calls, and some operations also write under `~/.jfrog/`. Grant the matching
-runtime access, or the commands fail (`Forbidden`, empty output) or the Step 0
-check returns a false "disabled" result.
+Each operation requires different runtime access. Grant per the table below,
+or the commands fail (`Forbidden`, empty output) or the Step 0 check returns
+a false "disabled" result.
 
 | Operation | What it needs |
 | --- | --- |
-| Step 0 check, `--inspect`, `--list-available` | Network: outbound HTTPS to the npm registry and the JFrog platform |
-| OAuth `--login`, removing a cached entry | Network + write access to `~/.jfrog/` (`jfrogmcp.conf.json`) |
+| Step 0 check (`node …check.mjs`) | Outbound HTTPS to the JFrog platform. When credentials come from `jf config`: also execute `jf` and read `$JFROG_CLI_HOME_DIR` when set, or `~/.jfrog/` otherwise |
+| `--inspect`, `--list-available` | Outbound HTTPS to the npm registry + JFrog platform; write `~/.npm/_npx` (npx cache) |
+| OAuth `--login` | Same as above, plus browser launch and write `~/.jfrog/jfrogmcp.conf.json` |
+| Removing an MCP config entry | Read both project and user harness MCP config files; write the matched file(s) (e.g. `.cursor/mcp.json`, `.mcp.json`). No network |
+| Clearing an OAuth cache key | Read + write `~/.jfrog/jfrogmcp.conf.json`. No network |
 
 How that access is granted depends on the agent. Some agents (e.g. Claude Code)
 read the skill's optional `allowed-tools` frontmatter to pre-approve the
