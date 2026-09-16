@@ -4,6 +4,8 @@ JFrog plugin for [Kiro](https://kiro.dev): artifact management, security scannin
 
 Works in both the **Kiro IDE** (as a Power) and **`kiro-cli`** (as additive skills). One install flow covers both.
 
+> **Preview Notice:** This Plugin is in preview and licensed under the Apache License 2.0. For clarity: This software is provided "as-is" without warranty of any kind, and without support obligations or service level commitments. Behavior, APIs, conventions, and structure may change without notice between releases. JFrog makes no guarantees of backward compatibility during the preview release cycle. Use in production environments is at your own risk.
+
 ## Skills
 
 | Skill | Description |

@@ -1,12 +1,14 @@
 ---
 name: "jfrog"
 displayName: "JFrog"
-description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects, run security scans, and query package safety. Ships the official JFrog knowledge as steering and drives the platform through the JFrog CLI (jf) and jf api."
+description: "Work with the JFrog Platform to manage Artifactory repositories, artifacts, users, groups, and projects, run security scans, and query package safety. Ships the official JFrog knowledge as steering and drives the platform through the JFrog CLI (jf) and jf api. Preview Notice: This Plugin is in preview and licensed under the Apache License 2.0. For clarity: This software is provided \"as-is\" without warranty of any kind, and without support obligations or service level commitments. Behavior, APIs, conventions, and structure may change without notice between releases. JFrog makes no guarantees of backward compatibility during the preview release cycle. Use in production environments is at your own risk."
 keywords: ["jfrog", "artifactory", "artifact", "repository", "xray", "devops", "binary-management", "curation", "skills"]
 author: "JFrog"
 ---
 
 # JFrog Platform
+
+> **Preview Notice:** This Plugin is in preview and licensed under the Apache License 2.0. For clarity: This software is provided "as-is" without warranty of any kind, and without support obligations or service level commitments. Behavior, APIs, conventions, and structure may change without notice between releases. JFrog makes no guarantees of backward compatibility during the preview release cycle. Use in production environments is at your own risk.
 
 The JFrog Platform is the universal binary management and DevSecOps solution used by developers, DevOps
 engineers, platform administrators, and security engineers to manage software artifacts across the entire
