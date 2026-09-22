@@ -380,13 +380,14 @@ its stdout as `<UA>`. Parse the `tool=<h>` field from `<UA>` and map it to a
 
 If `tool` is `unknown`, empty, or not in the table — do **not** guess. Ask
 the user for the desired install path and use `--path <dir>` instead.
-**Exception — Kiro (install only):** if you're self-identified as Kiro (IDE
-or `kiro-cli`, per your system prompt — `check-environment.sh` doesn't
-detect it), `--harness kiro` is rejected by `jf`, so skip asking and use
-`--path` with `.kiro/skills` (project) / `~/.kiro/skills` (global, or
-`$KIRO_HOME/skills` if `KIRO_HOME` is set) directly. This exception does not
-extend to `jf skills list` — see *List currently installed skills* in
-`managing-installed-skills.md`.
+**Exception — Kiro and Junie (install only):** `jf` accepts neither
+`--harness kiro` nor `--harness junie`, so if you're self-identified as either
+(Kiro IDE / `kiro-cli`, or Junie — `check-environment.sh` detects Junie but not
+Kiro), skip asking and use `--path` directly: `.kiro/skills` (project) /
+`~/.kiro/skills` (global, or `$KIRO_HOME/skills` if `KIRO_HOME` is set) for
+Kiro; `.junie/skills` (project) / `~/.junie/skills` (global) for Junie. This
+exception does not extend to `jf skills list` — see *List currently installed
+skills* in `managing-installed-skills.md`.
 
 Choose exactly one install target (these are mutually exclusive):
 
@@ -647,14 +648,15 @@ jf skills list --server-id "<SID>" --harness "<harness>" --check-updates
 ```
 
 Resolve `<harness>` to the current agent (see `installing-skills.md`).
-**Exception — Kiro:** `--harness kiro` errors `unknown agent`, and `list` has
-no `--path` flag. List directly from the filesystem instead: skill directory
-names under `.kiro/skills` (project) / `~/.kiro/skills` (global, or
-`$KIRO_HOME/skills`), each containing a `SKILL.md`. Version/description
-aren't available this way — omit those columns. This is a filesystem
-inventory only: a directory with a `SKILL.md` cannot confirm the skill was
-installed via `jf skills install` — a manually added skill looks identical.
-Present it as such rather than implying AI Catalog provenance.
+**Exception — Kiro and Junie:** neither `--harness kiro` nor `--harness junie`
+works, and `list` has no `--path` flag, so list directly from the filesystem:
+skill directory names under `.kiro/skills` / `~/.kiro/skills` (or
+`$KIRO_HOME/skills`) for Kiro, `.junie/skills` / `~/.junie/skills` for Junie,
+each containing a `SKILL.md`. Version/description aren't available this way —
+omit those columns. This is a filesystem inventory only: a directory with a
+`SKILL.md` cannot confirm the skill was installed via `jf skills install` — a
+manually added skill looks identical. Present it as such rather than implying
+AI Catalog provenance.
 **Never run a bare `jf skills list`** because it errors. Always pass
 `--harness <h>` (installed skills) or `--repo <key>` (registry contents).
 `--check-updates` is only supported with `--harness` (not with `--repo`). Merge
@@ -909,8 +911,17 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
 
 Publishing is mutating, so **always confirm the target repository and the skill
 name with the user before publishing**. Resolve the repo and read the name from
-the bundle, then show both and wait for an explicit "yes". Never publish on the
-initial request alone, and never auto-pick a repo without surfacing it first.
+the bundle, then show the package identity, version, destination, and signing
+state and wait for an explicit "yes". Never publish on the initial request
+alone, and never auto-pick a repo without surfacing it first.
+
+**Never silently select the first repository.** Resolve `<repo>` by the order
+below, then surface it and confirm — never publish to a repo the user has not
+seen. Provisioning the project's own skills repository is a deterministic
+resolution, not a silent pick. But when you fall back to listing existing repos
+(step 3) and more than one exists, you **must** list them all and let the user
+choose; never take the first result. Even with a single eligible repo, surface
+it and confirm before publishing.
 
 ## Contents
 
@@ -948,9 +959,17 @@ npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
    retry in a loop. Publishing is mutating, so you must get an explicit repo from
    the user here. This is the one case where you do ask before publishing.
 
-   First list the existing skills repos:
+   First list the existing skills repos. When `<PROJECT>` is known, scope the
+   list to that project so you offer only its repositories; fall back to the
+   server-wide list only when the project is unknown or the project-scoped list
+   comes back empty:
 
 ```bash
+# project-scoped (preferred when <PROJECT> is known)
+jf api '/artifactory/api/repositories?packageType=skills&type=local&project=<PROJECT>' \
+  --server-id "<SID>" 2>/dev/null | jq -r '.[].key'
+
+# server-wide fallback (project unknown, or the scoped list was empty)
 jf api '/artifactory/api/repositories?packageType=skills&type=local' \
   --server-id "<SID>" 2>/dev/null | jq -r '.[].key'
 ```
@@ -1023,6 +1042,18 @@ Precedence: an explicit `--signing-key`/`--key-alias` wins. Without it,
 `jf skills publish` falls back to `EVD_SIGNING_KEY_PATH`/`EVD_KEY_ALIAS`. With
 neither, the publish is unsigned.
 
+**For publish unsigned, drop the signer for this one publish only.** Otherwise,
+exported `EVD_SIGNING_KEY_PATH`/`EVD_KEY_ALIAS` sign the artifact with an
+inherited key. Scope the change to the single `jf skills publish` call — never a
+persistent unset, which would leak into later `jf` calls in the same shell:
+- POSIX shells: `env -u EVD_SIGNING_KEY_PATH -u EVD_KEY_ALIAS jf skills publish …`
+- PowerShell: save both values, set them to `$null` just for the publish, then
+  restore them — do not use a session-wide `Remove-Item Env:…`.
+
+Record the resolved **signing state** for the final confirmation below:
+`signed with alias <alias>`, `signed from the environment`, or `unsigned`.
+Never print the key path or its contents.
+
 To generate a key pair and register its public key in one step:
 
 ```bash
@@ -1038,11 +1069,23 @@ produces the right format.
 
 ## Confirm before publishing
 
-Once `<repo>` is resolved and the bundle validated, **show the user what will be
-published and wait for an explicit confirmation**. Reply using this exact
-template and do not run `jf skills publish` until the user agrees:
+Once `<repo>` is resolved, the bundle validated, and the signing state decided,
+**show the user exactly what will be published and wait for an explicit
+confirmation**. The summary must surface the package identity, version,
+destination, and signing state. Reply using this exact template and do not run
+`jf skills publish` until the user agrees. Fill `<version>` with what will
+actually be published: the explicit semver if the user gave one, otherwise the
+`version` declared in the bundle's `SKILL.md` frontmatter (what the CLI publishes
+when `--version` is omitted). Fill `<signing-state>` with the value recorded in
+*Sign the skill*:
 
-  > Publishing skill `<slug>` uploads it to repository `<repo>` on server `<SID>`. Do you want to publish it?
+  > About to publish:
+  > - Skill: `<slug>`
+  > - Version: `<version>`
+  > - Destination: `<repo>` on `<SID>`
+  > - Signing: `<signing-state>`
+  >
+  > Do you want to publish it?
 
 Never combine this final confirmation step with the previous signing step into one prompt.
 
@@ -1054,8 +1097,9 @@ again. Only proceed to *Publish* after an explicit "yes".
 Publish to the resolved `<repo>`. The version is optional. Only pass `--version`
 when the user gives an explicit semver, and do not ask the user for a version. Pass `--signing-key`/`--key-alias` only when signing with an
 explicit key the user provided or generated. Omit them when relying on
-`EVD_SIGNING_KEY_PATH`/`EVD_KEY_ALIAS` from the environment, or when publishing
-unsigned.
+`EVD_SIGNING_KEY_PATH`/`EVD_KEY_ALIAS` from the environment. When publishing
+unsigned, omit them **and** clear both env vars (see *Sign the skill*) so the
+fallback cannot sign the artifact.
 
 ```bash
 jf skills publish "<path>" \
@@ -1066,6 +1110,11 @@ jf skills publish "<path>" \
   [--version "<semver>"] \
   [--signing-key "<private-key-path>" --key-alias "<alias>"]
 ```
+
+For the **publish unsigned** choice, run this command with
+`EVD_SIGNING_KEY_PATH`/`EVD_KEY_ALIAS` cleared for that single invocation only
+(see *Sign the skill* for the POSIX and PowerShell forms) so no inherited key is
+used.
 
 **Always pass `--skip-scan`.** Without it, the CLI runs a synchronous Xray check
 immediately after upload. Because the artifact is brand-new and not yet indexed,
