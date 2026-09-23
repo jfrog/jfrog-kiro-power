@@ -1733,6 +1733,11 @@ Hard rules and known failure modes:
   (especially the product prefix) and target server version. On any of
   these errors, do not try a different configured server as a workaround —
   that targets a different environment. Report the error and ask the user.
+- **No retry loops (HARD).** No `while true`; no empty `offset=`/`page=`.
+  403/404/timeout → stop. 401 → re-login **same** server, then **one** retry of that URL (sole identical-request exception). Identical path + query a **second** time → stop. First page `offset=0` or `page_num=1`.
+  Pager: 2xx and `next_offset` **greater than** last offset, or increment
+  `page_num`. Cap **20 pages**. No `GET /api/v1/artifacts`. AQL on
+  `<repo>-cache` (never `<virtual>-cache`). Package-block 403 → `jfrog-package-curation`.
 - **Xray contextual analysis:** the summary artifact response has two
   applicability fields — `applicability` (top-level, often null) and
   `applicability_details` (always present with a `result` string). **Use
@@ -1990,7 +1995,8 @@ endpoints, auto-authenticated against the resolved server. **Do not use
 ## Product-prefix table
 
 `jf api` requires the **full** path including the product prefix; omitting it
-returns 404.
+returns 404. Never invent `GET /api/v1/artifacts`. Cursor is `offset=0` or
+Xray `page_num=1`. Loops / 401 / 403 → `cli-gotchas.md`.
 
 | Product | Path prefix |
 |---------|-------------|
@@ -5473,14 +5479,15 @@ jf api "/xray/api/v1/services/results?repo=docker-local&path=my-service/1.0/mani
 
 ### Paginating exposure results
 
+`page_num` starts at **1**. Non-zero exit or empty `.data` → stop. Cap **20 pages**.
+
 ```bash
 PAGE=1
-while true; do
-  RESP=$(jf api "/xray/api/v1/secrets/results?repo=my-repo&path=my-artifact&page_num=$PAGE&num_of_rows=100")
-  echo "$RESP" | jq '.data[]'
-  TOTAL=$(echo "$RESP" | jq '.total_count')
-  COUNT=$(echo "$RESP" | jq '.data | length')
-  [ "$COUNT" -eq 0 ] && break
+MAX_PAGES=20
+while [ "$PAGE" -le "$MAX_PAGES" ]; do
+  if ! jf api "/xray/api/v1/secrets/results?repo=my-repo&path=my-artifact&page_num=$PAGE&num_of_rows=100" \
+      > /tmp/xr-$$.json; then break; fi
+  jq '.data[]' /tmp/xr-$$.json
   PAGE=$((PAGE + 1))
 done
 ```
@@ -5599,8 +5606,8 @@ policy that affected the decision (blocking, bypassed, waived).
 
 ### Pagination
 
-`offset` + `num_of_rows`. `meta.next_offset` → next page. First request:
-`include_total=true` for total event count.
+`offset` + `num_of_rows`. First page **`offset=0`** (never `offset=`).
+Advance only when `next_offset` is an integer **greater than** last offset. Cap 20 pages.
 
 ### Common use cases
 
