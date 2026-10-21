@@ -97,23 +97,31 @@ Versions of `<slug>`:
 
 # Discovering skills
 
-List-all and versions go through the **Agent Guard**.
+List-all and versions go through the **Agent Guard** and are always limited to
+skills allowed by the project's governance policy. This has no exceptions for
+those Agent Guard catalog calls (`--list-skills`, `--list-skill-versions`).
+
+The repo-scoped `jf skills list --repo` command below is a different, narrower
+tool: it lists a repository's raw contents directly from Artifactory, not
+through Agent Guard, so it is not governance-filtered. It is not a discovery
+path — see *List a repo's skills* for when it's appropriate to use.
 
 ## List skills (page through the catalog)
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skills --project "<PROJECT>" [--name <PATTERN>] [--server "<SID>"] [--page-size <N>] [--cursor <C>] [--format json]
+  --list-skills --project "<PROJECT>" --allowed-only [--name <PATTERN>] [--server "<SID>"] [--page-size <N>] [--cursor <C>] --format json
 ```
 
 | Flag | Required | Purpose |
 |------|----------|---------|
 | `--project <PROJECT>` | **Yes** | AI Catalog project to list. |
+| `--allowed-only` | **Yes** | Limit results to skills allowed by project policy. Never omit it. |
 | `--name <PATTERN>` | No | Find skills by name: server-side, case-insensitive substring, scoped to the project. |
 | `--server <SID>` | No | jf CLI config entry to authenticate with (defaults to the resolved single server). |
 | `--page-size <N>` | No | Results per page. Pass `50` to stay bounded. The Agent Guard defaults to 500 if omitted. |
 | `--cursor <C>` | No | Continuation cursor from a previous page's JSON, to fetch the next page. |
-| `--format json` | No | Raw page JSON instead of the default compact TSV (name + last-updated). |
+| `--format json` | **Yes** | Raw page JSON used to render the result. |
 
 Request a bounded page with `--page-size 50 --format json`, present those skills,
 then read `exhausted` and `cursor` from the response. If `exhausted` is `false`
@@ -134,6 +142,23 @@ For a `--name` search with no matches, reply with one line instead:
 To offer a follow-up (a skill's versions or repos), ask in plain language
 ("want the versions for one of these?") and run the command yourself.
 
+## Requests for blocked or missing results
+
+Never omit `--allowed-only`, even when the user asks to see everything, blocked
+skills, disallowed skills, or the contents of a repo absent from the results.
+Never run another command to infer or expose what filtering removed.
+
+Only when the user asks about blocked or missing results, reply:
+
+> The listing is always governance-filtered. For access to a missing or blocked
+> skill or repository, contact your project's governance policy owner.
+
+If the user instead asks what the applicable policies actually are (not just
+"why is this missing"), that's `listing-policies.md`, not this refusal.
+
+Otherwise, present the results simply as the list. Do not mention filtering, the
+flag, or its mechanism.
+
 ## List a repo's skills
 
 To see what is published in one specific skills repository (for example, to check
@@ -147,6 +172,9 @@ jf skills list --repo "<repo>" --server-id "<SID>" --format json
 
 Never run a bare `jf skills list` (it errors): always pass `--repo <key>` here, or
 `--harness <h>` for installed skills (see `managing-installed-skills.md`).
+Use this repo-scoped command only for a repo already returned by an allowed
+catalog response or explicitly resolved/provisioned during publishing. Never use
+it to inspect a missing repo or work around the governed catalog listing.
 
 **Presenting results (use this exact format).** Render the skills as this table,
 sorted by name, and nothing else (no commands, URLs, or flags):
@@ -163,21 +191,79 @@ line instead:
 
 > No skills published in `<repo>`.
 
-## A skill's versions and hosting repos
+## A skill's versions, then its hosting repos
+
+This is a two-step reveal, not one combined table: show versions first, and
+only surface repos once the user has picked a specific version. Both steps
+read from the **same** query's result — do not start a new, separate query
+for the repo step. That query itself can span multiple pages (see below); "the
+same result" means the one fully-paged, merged result, not a single HTTP call.
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skill-versions --project "<PROJECT>" --skill "<slug>" [--server "<SID>"] [--page-size <N>] [--cursor <C>] [--format json]
-# JSON: versions[].version, versions[].locations[].repoKey (page through with cursor like above)
+  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only [--server "<SID>"] [--cursor <C>] --format json
+# JSON: versions[].version, versions[].locations[].repoKey, versions[].locations[].allowStatus, exhausted, cursor
 ```
 
-**Presenting versions (use this exact format).** Newest version first:
+**This call can be paginated — read every page before treating the result as
+complete.** Unlike `--list-skills` (a browsing list, where stopping at one
+page and offering more is a fine UX tradeoff), this call feeds a version/repo
+*decision*: a truncated result here isn't a UX compromise, it's a wrong
+answer — a real newer version, or a repo that only hosts a later version,
+could be sitting on a page you never fetched. If `exhausted` is `false`, keep
+calling with `--cursor <cursor>` (same `--skill`/`--allowed-only`) and merge
+every page's `versions[]` into one combined list before doing anything else.
+Only once `exhausted` is `true` do you have a complete result to run the
+version-first / repo-second reveal on. Do this silently — do not narrate
+paging to the user or ask if they want more, and never repeat the call for a
+page you've already fetched.
+
+Skill identity is **name+version+repository-path, not just name+version**
+(MLAI-1309): the same slug and version can exist as genuinely different
+skills in different repos, so a name+version match alone is never proof two
+entries are the same skill. Each `locations[]` entry carries its own
+`allowStatus` — a repo's governance status is a per-repo fact, never a
+per-version one. Because `--allowed-only` is always on, every repo that comes
+back is allowed; a version whose only host repo is blocked simply won't
+appear.
+
+**Step 1 — present versions only (use this exact format).** Newest version
+first. Do **not** include a repos/"Hosted in" column here — repos are a
+separate reveal in step 2:
 
 Versions of `<slug>`:
 
-| Version | Hosted in |
-|---------|-----------|
-| `<version>` | `<repoKey>`[, `<repoKey>`…] |
+| Version |
+|---------|
+| `<version>` |
+
+Then ask which version the user wants (to install, or just to see where it's
+hosted) — use the agent surface's native single-choice picker when one is
+available (one option per version, newest first), otherwise ask in plain
+language. Do not assume the newest one.
+
+**Step 2 — once a version is chosen, present its repos (use this exact
+format).** Filter the already-fetched `locations[]` down to that one version
+— no new API call:
+
+Repos hosting `<slug>@<version>`:
+
+| Repo |
+|------|
+| `<repoKey>` |
+
+Every repo listed here is governance-allowed (the filter is always on), so
+do **not** annotate rows with a status suffix — an "(allowed)" tag on every
+row is noise. Agent Guard's own compact TSV does print `<repoKey> (allowed)`;
+strip that when rendering this table.
+
+- **Exactly one repo.** State it plainly ("hosted in `<repoKey>`") — no need
+  to ask the user to choose.
+- **More than one repo.** Never auto-pick or merge. Ask which repo they mean
+  before doing anything further (installing, etc.) — use the agent surface's
+  native single-choice picker when one is available (one option per
+  `repoKey`), otherwise render the table above and ask in plain language. See
+  `installing-skills.md`'s *Resolve the repo*.
 
 
 ## installing-plugins
@@ -334,13 +420,26 @@ verify-landed check.
 
 ## Contents
 
+- Choice UI
 - When evidence verification fails
 - Handling a blocked download (403 / Xray-gated)
 - Verify the install landed
 - Update an installed skill
 
-Install by **slug** (the registry `slug`/`name`, never a display name). Latest
-version is used by default, and the user may pass an explicit version.
+Install by **slug** (the registry `slug`/`name`, never a display name). Always
+resolve and pass a concrete version and repository. Never install with
+`--version "latest"` and never choose the first repository as a default —
+at install time the repo is not yet resolved, and `--version "latest"` could
+silently pick an ambiguous version/repo combination without the required ask.
+
+**Exception — `jf skills update` may use `--version "latest"`.** An update
+target is already installed, so its repo is fixed — not automatically by
+`jf`, but by reading it back from that install's own record (see *Update an
+installed skill* below) — and `allowStatus` is a per-repo fact, not
+per-version, so every version in that already-allowed repo is equally
+allowed. "Latest version in this specific, already-resolved repo" carries
+none of the version/repo ambiguity this rule exists to prevent.
+
 **The `jf skills install` command takes no project.** Resolving which repo hosts
 the slug uses `--list-skill-versions` (below), which does require `--project`, so
 use `<PROJECT>` resolved at session start (see SKILL.md Prerequisites).
@@ -348,7 +447,7 @@ use `<PROJECT>` resolved at session start (see SKILL.md Prerequisites).
 ```bash
 jf skills install "<slug>" \
   --server-id "<SID>" \
-  --version "latest" \
+  --version "<version>" \
   --repo "<repo>" \
   --harness "<harness>" \
   --quiet
@@ -398,28 +497,131 @@ Choose exactly one install target (these are mutually exclusive):
 | `--project-dir <dir>` | Project root combined with the agent's project path. |
 | `--path <dir>` | Direct: files go under `<dir>/<slug>`. |
 
-**Always resolve and pass `--repo`.** When the platform has more than one skills
-repository (the common case), `jf skills install` errors with `multiple skills
-repositories found … specify --repo` if you omit it, even when the skill lives
-in only one repo. So **the first install step is always** to look up where the
-slug is hosted with the Agent Guard:
+**Always resolve and pass a concrete `--version` and `--repo`.** When the platform
+has more than one skills repository (the common case), `jf skills install`
+errors with `multiple skills repositories found … specify --repo` if you omit
+it, even when the skill lives in only one repo. Resolve both values from this
+one Agent Guard query:
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skill-versions --project "<PROJECT>" --skill "<slug>" [--server "<SID>"] --format json
-# read versions[].version and versions[].locations[].repoKey
+  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only [--server "<SID>"] [--cursor <C>] --format json
+# read versions[].version, versions[].locations[].repoKey, versions[].locations[].allowStatus, exhausted, cursor
 ```
+
+**This can be paginated — read every page before resolving anything from it.**
+If `exhausted` is `false`, keep calling with `--cursor <cursor>` (same
+`--skill`/`--allowed-only`) and merge every page's `versions[]` before doing
+the version/repo resolution below. A skill with more versions than one page
+holds must never look like it has fewer, or be missing the repo that only
+hosts its true latest version. Do this silently, with no pagination commentary
+to the user. Once merged and `exhausted` is `true`, that combined result is
+what "Do not make another catalog call" below refers to — you still must not
+re-run this query a second time to separately resolve version and then repo.
 
 **Resolve the repo and version only via `--list-skill-versions`.** The catalog
 listing (`--list-skills`, even with `--name`) returns just names, not repos or
 versions, so use the versions call above to pick the repo, never a name listing.
 
-- **One repo hosts the slug.** Use it as `--repo <repoKey>` directly. Don't ask.
-- **Multiple repos host the slug.** Do not pick silently. Naming a project is not
-  a repo choice, so ask even when one repo is project-scoped. List the repos (and
-  the version each holds), ask the user which to install from, then pass
-  `--repo <chosen>`. The newest version may only exist in one of them, so
-  surface that to avoid giving the user a stale version.
+Resolve choices in this order. **These are two separate questions, asked one
+at a time — never combine them into a single choice.** Even when the
+version-versions endpoint returns every version×repo combination in one
+response, do not present that as a flattened list (e.g. "0.1.1 →
+repo-a", "0.1.1 → repo-b", "0.1.0 → repo-a", "0.1.0 → repo-b") and ask the
+user to pick one row. Ask which version first, stop and wait for that
+answer, and only then — scoped to the chosen version alone — ask which repo,
+if more than one hosts it.
+
+1. **Version first.**
+   - If the user named a version, verify that exact value exists in
+     `versions[].version`. If absent, stop and offer the returned versions with
+     the picker described below. Do not make another catalog call.
+   - If the user did not name a version and exactly one version exists, use that
+     concrete version without asking.
+   - If the user did not name a version and more than one exists, ask which
+     version to install. Present versions newest first. Never assume the newest,
+     `"latest"`, or the first response entry. **Stop your turn on this
+     question and wait for the user's reply.** Do not pick one yourself and
+     continue in the same response — see *Choice UI* below.
+   - **"Newest allowed" is still assuming the newest.** `--allowed-only`
+     filters out versions/locations you must never show, not a signal that
+     the remaining newest one is the right default. If more than one
+     governance-allowed version remains, the ask above still applies — do
+     not silently install "the newest allowed version" and only ask about
+     the repo.
+   - If no versions exist, report that the skill is unavailable for the project
+     and stop.
+
+2. **Repository second.** After settling the version, use only that version
+   object's `locations[]`; discard locations attached to every other version.
+   Do not make another catalog call.
+   - If the user named a repo, verify it is among the selected version's
+     locations. If absent, say that repo is not governance-allowed for the
+     project and stop. Never retry without the policy filter or inspect the repo
+     directly.
+   - If exactly one repo hosts the selected version, use its `repoKey` without
+     asking.
+   - If more than one repo hosts the selected version, ask which repo to use.
+     Never pick the first or the most recently updated-looking repo: equal
+     slug+version values in different repos can contain different skills.
+     **Stop your turn on this question and wait for the user's reply.** Do not
+     pick one yourself and continue in the same response — see *Choice UI*
+     below.
+   - **There is no "project-owned repo."** `<PROJECT>` scopes which skills and
+     versions the catalog query returns — it is not a field on `locations[]`
+     and it never disambiguates between multiple repos that host the same
+     version. Do not infer a repo from the project name, a repo name that
+     happens to contain the project name, "the one that matches the active
+     project," or any other derived signal not present in `locations[]`
+     (`repoKey`, `allowStatus`). If you catch yourself constructing a
+     justification for skipping the ask, that justification is wrong — ask
+     instead.
+   - If the selected version has no returned locations, report it unavailable
+     for the project and stop.
+
+   **Each repo carries its own governance status (MLAI-1309).** Skill
+   identity is name+version+repository-path, not just name+version, and a
+   repo's `allowStatus` in `locations[]` is a per-repo fact, never a
+   per-version one. The skill always passes `--allowed-only` to
+   `--list-skill-versions`, so only governance-allowed repos ever come back
+   and every candidate you show the user is installable. Never re-run
+   without the flag to surface blocked repos — if a repo the user expects is
+   missing, say it isn't governance-allowed for this project and stop there.
+
+## Choice UI
+
+Use the agent surface's native interactive single-choice picker (an arrow-key
+selectable menu) whenever a version or repo choice is required and such a
+picker is available to the skill. Do not print a table and wait for a typed
+reply when a picker is available.
+
+**Asking is not complete until the user replies — on any surface.** Whether
+you use a native picker or the Markdown table fallback, end your turn on the
+question itself. Never treat rendering the question as satisfying the "ask
+the user" requirement and then proceed to resolve the choice yourself and
+call `jf skills install` in that same turn — that is exactly the missing
+version/repo confirmation this section exists to prevent (MLAI-1309). This
+applies even on chat-only surfaces with no way to block for input: the fix
+for having no blocking mechanism is to stop responding, not to guess and
+install.
+
+**Not every harness has a native picker.** Some agent surfaces (for example
+GitHub Copilot Chat in the VS Code plugin) run skills as chat-turn
+instructions with no programmatic access to a native single-choice picker.
+Never claim or imply a picker exists where it doesn't — on those surfaces,
+always use the Markdown table fallback below.
+
+- Version picker: label each option with only the version string, newest first.
+  Do not include repo keys before the version is settled.
+- Repo picker: label each option with only its `repoKey`. Put
+  `<slug>@<version>` in that option's description or subtitle, not its label.
+- Do not append "(allowed)" to repo labels. Every returned location is already
+  allowed.
+- Fall back to a Markdown table followed by a plain-language question whenever
+  no interactive picker exists in the current context. Use one **Version**
+  column (newest first) for versions or one **Repository** column (`repoKey`
+  only) for repos, and name `<slug>@<version>` in the repo question. Never add
+  an "(allowed)" annotation.
 
 ## When evidence verification fails
 
@@ -496,14 +698,34 @@ On success, reply using **this exact template**:
 ## Update an installed skill
 
 To upgrade an installed skill to a newer version, use the CLI (it re-downloads
-and reinstalls in place):
+and reinstalls in place). **`jf skills update` does not remember which repo the
+skill was installed from — you must resolve and pass `--repo` yourself.**
+Without it, update either fails with `multiple skills repositories found`
+(listing every skills repo on the whole server, not scoped to this project or
+its governance policy at all) or, if handed some other repo, silently updates
+from it — even one that never hosted the originally installed skill. Never
+run `jf skills update` without a resolved `--repo`.
+
+**Resolve `<repo>` from the existing install, never by asking the user or
+guessing.** Every install writes it to `.jfrog/skill-info.json` under the
+install directory:
 
 ```bash
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --version "latest" --quiet
+jq -r '.repo' "<install-dir>/<slug>/.jfrog/skill-info.json"
+```
+
+If that file or its `.repo` field is missing (for example, a skill that was
+manually copied in rather than installed with `jf skills install`), tell the
+user you can't safely determine which repo to update from and stop. Do not
+substitute a repo from a fresh catalog listing instead — a same-named repo
+returned there is not proof it is the repo this specific install came from.
+
+```bash
+jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --version "latest" --quiet
 # Preview without touching Artifactory:
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --dry-run
+jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --dry-run
 # Reinstall even if already at the target version:
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --force --quiet
+jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --force --quiet
 ```
 
 Use the same install-target flag (`--harness`/`--global`/`--project-dir`/
@@ -519,6 +741,105 @@ On success, reply using **this exact template**:
 If the skill was already current:
 
 > `<slug>` is already at the latest version (`<version>`). Nothing to update.
+
+
+## listing-policies
+
+# Listing skill governance policies
+
+Answers "what policies apply to skills in this project?" **before** the user
+tries to install or run one — proactively, not as a reaction to a blocked
+download. These are **AI Catalog policies** (the AI Catalog's own governance
+engine: allow-lists, malicious-skill checks, block/warn modes) for **skills**,
+distinct from two other systems that also use the word "policy" or
+"approved" in this project:
+- Xray's repository watches — a separate system; do not conflate the two,
+  and do not reuse this flow for an Xray/Curation "blocked by policy"
+  message — see *Handling a blocked download* in `installing-skills.md`.
+- MCP approval/allow status — a different asset type entirely, owned by
+  `jfrog-mcp-management`, not this skill, even when the user says "policy"
+  or "approved" while actually asking about an MCP server.
+
+**Never say "Unified Policy" to the user.** That's the internal service name
+behind this flow — plumbing, like every other backend this skill family
+talks to. Call it an "AI Catalog policy" (or just "policy") in anything you
+say to the user, the same way the rest of this skill never surfaces
+`npx`/Agent Guard internals.
+
+## List the policies
+
+The query, auto-pagination, and error-scrubbing are **all owned by a bundled
+script** — this is fully deterministic once `<PROJECT>` and `<SID>` are
+known, so none of it is left to be reconstructed freehand each time.
+Presentation is not: the script hands back structured data, and you build
+the response.
+
+Resolve `<PROJECT>` per **Resolve the project** in `../SKILL.md`'s
+Prerequisites (never assume `default`, never invent one), then run:
+
+```bash
+node ~/.kiro/jfrog-scripts/jfrog-ai-catalog/list-skill-policies.mjs --project "<PROJECT>" --server-id "<SID>"
+```
+
+Always invoke via `node <path>` — never execute the file directly.
+
+- **stdout, exit 0**: one JSON object with three keys — `message`, `note`,
+  `policies`.
+  - If `message` is non-null, present that string **verbatim** and stop —
+    ignore `policies` and `note` entirely. Never build a table for this
+    case, and never reword it: it deliberately covers two different
+    situations ("no policies apply" and "not authorized to see them") with
+    one honest, non-guessing message — see the Gotchas below.
+  - Otherwise, build the response from `policies` — an array of
+    `{ name, scope, action, rules: [{ type, condition }] }`. A markdown
+    table (Policy / Scope / Rule type / Action / Condition) is the natural
+    shape, but you decide the exact presentation for your harness; a
+    policy with multiple `rules` can be one row per rule or one row with
+    joined values, your call. `scope`/`action`/`type`/`condition` are
+    `null` when the wire value was absent or unrecognized — render that
+    however fits (e.g. "—" or "unspecified"), just don't invent a value.
+    Any literal `|`, backtick, or newline inside a `name`/`type`/`condition`
+    is real user-authored content, not markdown syntax — escape it
+    yourself if you render a table.
+  - If `note` is non-null, append it **verbatim** after your response —
+    it distinguishes a project simply having enough policies to hit the
+    lookup's safety cap from a later page genuinely failing to load after
+    earlier ones already succeeded (an honest partial answer, not a total
+    failure, since real data is already in hand). Don't reword it or
+    collapse it into a generic "capped" message.
+- **stderr, exit 1**: the call itself failed (for any reason — including the
+  account lacking the AI Catalog entitlement; the script does not pre-check
+  entitlement separately, since that check does not reliably reflect whether
+  this specific capability is available). stderr is a single line with any
+  Trace ID dropped and the internal service's own name/URL replaced — present
+  it verbatim as the failure. Do not speculate about *why* it failed beyond
+  what that line says.
+- **exit 2**: a usage error (missing `--project`/`--server-id`) — a bug in
+  how the script was invoked, not something to show the user as a policy
+  answer.
+
+## Gotchas
+
+- **Never expose the "Unified Policy" name, its API path, or any other
+  internal service detail to the user.** Present everything as an "AI
+  Catalog policy" — this applies to prose, error messages, and any
+  follow-up explanation you build from `policies`, not just the parts the
+  script already scrubs on its own (`message`/`note`, and each field value).
+- **Don't leak the plumbing.** Never show the user the script invocation,
+  the underlying `jf api` call, or the raw JSON itself — parse it and
+  present your own rendering of `policies`, not the wire shape.
+- **A policy's Action is independent of its Rule type's own allow/block
+  semantics.** Action is the *enforcement* mode (does a match block or just
+  warn); Rule type is *what* it matches on (an allow-list, a malicious-skill
+  check, etc.) — keep these as separate fields in whatever you render;
+  don't collapse them when talking about a result.
+- **The empty-result `message` already states both possibilities — don't
+  strip that down to just "no policies apply" when relaying it.** The
+  backend returns the identical empty result for "nothing here" and "you
+  can't see this," with no non-admin way to tell them apart (the same
+  limitation already noted for project-key validation in `../SKILL.md`), so
+  the message itself names both. Present it whole; don't paraphrase it into
+  a more confident-sounding claim than it makes.
 
 
 ## managing-installed-plugins

@@ -805,20 +805,21 @@ would be redundant here.
 
 Print exactly one ready-to-run command, with `--url` (and, for Step 4,
 the already-resolved `--server-id`) filled in — the user runs it
-**themselves, in their own terminal**, replacing the placeholder with
-their own token. **Never** ask for the token in chat, and never run
-this command yourself via the Bash tool — the token must not enter
-this conversation at all.
+**themselves, in their own terminal**, picks **Access Token**, and
+pastes their token at jf's hidden prompt (never on the command line,
+where other local users can read it in process listings). **Never** ask
+for the token in chat, and never run this command yourself via the
+Bash tool — the token must not enter this conversation at all.
 
 - **Step 3** (no server-id yet — one will be created):
   ```
-  jf config add jfrog --url=<url> --access-token=<paste-your-token-here> --interactive=false
+  jf config add jfrog --url=<url> --interactive
   ```
 - **Step 4** (existing server, refreshing a stale token — reuse the
   already-resolved `<server-id>` and `--overwrite` so this updates the
   same entry instead of creating a second one):
   ```
-  jf config add <server-id> --url=<url> --access-token=<paste-your-token-here> --interactive=false --overwrite
+  jf config add <server-id> --url=<url> --interactive --overwrite
   ```
 
 Send this as its own chat message (same rule as today: no `!` prefix —
@@ -907,19 +908,35 @@ keeping it inside `jf`'s own process the whole time.
 ## What this step does
 
 Registers the JFrog Claude agent-plugin marketplace with
-Claude Code (`claude plugin marketplace add <url>`), so plugins
+Claude Code (declared in its config, then fetched with
+`claude plugin marketplace update <name>`), so plugins
 published to Artifactory become installable via `/plugin install`.
 `jfrog-add-claude-marketplace.mjs` does all of it, including the
-`~/.netrc` write below — never call `claude` yourself.
+config writes below — never call `claude` yourself.
 
-## The `~/.netrc` write
+## Where the token is stored
 
-The only file this skill creates to hold a token, so say so plainly if the
-user asks. The token goes to `~/.netrc`, replacing any prior block for that
-host. `claude plugin install` needs it because the marketplace lists each
-plugin as a plain Artifactory URL with no credentials in it. The marketplace
-fetch does not use the file, because the token passed to `claude plugin
-marketplace add` reaches Claude Code's own plugin config.
+Nowhere new. The script installs a helper at
+`~/.jfrog/skills/marketplace-headers.mjs` (under `JFROG_CLI_HOME_DIR` when
+set) and declares the marketplace in Claude Code's config (`settings.json`
+and `plugins/known_marketplaces.json` under `CLAUDE_CONFIG_DIR`, default
+`~/.claude`) with a `headersHelper` naming that helper and the resolved
+server. Claude Code runs the helper on each marketplace and plugin fetch;
+it asks `jf` for the token at request time, so neither file nor any command
+line holds it. Discovery also goes through `jf`, so `jf`'s proxy settings apply.
+
+Copies an earlier Step 8 left are removed. A token in another JFrog
+marketplace entry's URL or `Authorization` header is dropped, and an entry
+on the same JPD gets the same `headersHelper` so it still logs in. After a
+successful register, the `~/.netrc` block for this JPD's host whose password
+is the token `jf` holds is deleted; every other block stays, including one
+for this host with another password.
+
+Requirements, or the script fails red and the user adds the marketplace by hand:
+
+- `jf` on `PATH` and logged in to that server.
+- Claude Code 2.1.238 or later.
+- A server ID of letters, digits, `.`, `_` or `-` only.
 
 ## Server scope
 
@@ -1379,8 +1396,8 @@ automatically and do not try a second install method.
   export` only in memory, for one `fetch` call. Step 3/4's token-based
   `jf config` path (see the `jf-config-auth-picker` section of the `#jfrog-init-references` steering) never
   touches this skill or the model at all — the user runs that command
-  themselves. **Step 8 is the one deliberate exception** — it writes
-  the token to `~/.netrc`; see the `marketplace-setup` section of the `#jfrog-init-references` steering.
+  themselves. Step 8 stores no token either: Claude Code asks `jf`
+  through a helper at request time; see the `marketplace-setup` section of the `#jfrog-init-references` steering.
 
 
 ## project-matching
@@ -1787,8 +1804,8 @@ lookups), `node
 - `jfrog-state-file.mjs`'s **`set`** mode (writes `~/.jfrog/setup.json`
   with caller-supplied server-id/URL/project-key — see the Final summary
   in `SKILL.md`)
-- `jfrog-add-claude-marketplace.mjs` (Step 8 — rewrites `~/.netrc` and
-  calls `claude plugin marketplace add`, mutating Claude Code's own
+- `jfrog-add-claude-marketplace.mjs` (Step 8 — installs the headers helper
+  under `~/.jfrog/skills` and calls `claude plugin marketplace update`, mutating Claude Code's own
   marketplace config — see `marketplace-setup.md`). **Unlike the other
   entries in this list, this one has no prior `AskUserQuestion` consent
   step** — the harness's own approval prompt is the only gate before it
@@ -1814,7 +1831,7 @@ distinct reason: they're the five scripts in this directory that mutate
 something outside their own process (a downloaded binary made executable
 and run, the plugin's `mcp.json`, the user's own OpenCode config — the
 first mutation targeting a personal file rather than a plugin-owned one
-— the setup state file, and `~/.netrc` plus Claude Code's own
+— the setup state file, and the headers helper plus Claude Code's own
 marketplace config, respectively) rather than just reading state and
 emitting JSON.
 A prior version of this grant covered every `*.mjs` in `scripts/`

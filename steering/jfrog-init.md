@@ -32,7 +32,7 @@ this is just the map:
 - Everything else is read-only, except: Step 5's placeholder
   substitution and OpenCode-only `mcp.jfrog` write (both unattended, no
   `AskUserQuestion` — see the `script-invocation` section of the `#jfrog-init-references` steering); Step 8's
-  `~/.netrc` write (same, see the `marketplace-setup` section of the `#jfrog-init-references` steering); and
+  headers-helper install and Claude Code config writes (same, see the `marketplace-setup` section of the `#jfrog-init-references` steering); and
   the Final summary's state write below.
 
 Step 1's `nvm` install and `jfrog-install-jf-cli.mjs`, Step 3's
@@ -93,7 +93,7 @@ Non-Claude harnesses need both.
   selection (Step 6). Everything else is read-only except Step 5's
   placeholder substitution (plus OpenCode `mcp.jfrog` write, and the
   kiro-cli `~/.kiro/settings/mcp.json` / Junie `~/.junie/mcp/mcp.json`
-  merge), Step 8's `~/.netrc` write, and the
+  merge), Step 8's headers-helper install and Claude Code config writes, and the
   Final summary's state write.
 - **Never surface the checklist.** Run silently — no step narration, no
   raw JSON/exit codes, no branch-reasoning said out loud. See
@@ -110,8 +110,9 @@ Non-Claude harnesses need both.
   [Final summary](#final-summary) checklist — never end on ad-hoc
   "Summary / Changes" status text.
 - **Never store, log, or print an access token** — credentials stay
-  inside `jf`'s own process or in-memory for one `fetch` call. **Step 8
-  is the one deliberate exception** (writes `~/.netrc`) — see
+  inside `jf`'s own process or in-memory for one `fetch` call. Step 8
+  stores none: Claude Code's marketplace config names a helper that asks
+  `jf` at request time — see
   [Step 8](#step-8-claude-agent-plugin-marketplace-registered) and
   [Non-goals](#non-goals-out-of-scope-for-this-skill).
 - **This skill is the exception to, not a consumer of, the base
@@ -328,6 +329,9 @@ and adding the `jfrog` entry to the tool's own global MCP config for kiro-cli
 (`~/.kiro/settings/mcp.json`) and Junie (`~/.junie/mcp/mcp.json`) (see
 the `mcp-plugin-config` section of the `#jfrog-init-references` steering).
 
+If the `file` already holds a real JPD url (e.g. `https://company1.jfrog.io/mcp`) and its host differs from the `jf config` JPD (e.g. `company2.jfrog.io`),
+edit that file's `jfrog` entry `url` to `https://<jf config JPD host>/mcp` (JSON edit, keep the rest). Same host: leave it.
+
 **Stop and read the `mcp-plugin-config` section of the `#jfrog-init-references` steering in full** — substitution mechanics,
 per-harness paths, exit-code branches (Exit 1/3 non-blocking, Exit 2 the one that
 still blocks), and its **MCP-responding probe** (server enabled + signed in) —
@@ -469,8 +473,7 @@ fields, and the state-file write behavior.
 
 **Read the `out-of-scope` section of the `#jfrog-init-references` steering in full** for the exact list — IDE
 plugin/VS Code hook install, first-MCP wizard, project-key
-persistence, AI Catalog role grants, and access-token handling
-(Step 8's `~/.netrc` write is the one deliberate exception).
+persistence, AI Catalog role grants, and access-token handling.
 
 
 ## Before you run `/jfrog-init` — checklist
@@ -493,8 +496,7 @@ persistence, AI Catalog role grants, and access-token handling
       never invented, never `jf`'s own fallback
 - [ ] Steps 1-4 all pass → `jfrog-state-file.mjs set <server-id> <jpdUrl>
       <project-key>` before rendering the final summary
-- [ ] Never store, log, or print an access token — except Step 8's
-      `~/.netrc` write
+- [ ] Never store, log, or print an access token — Step 8 included
 - [ ] Read the base the `#jfrog` steering for context; do not run its
       environment check as a gate before this walk
 

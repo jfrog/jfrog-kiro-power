@@ -211,11 +211,17 @@ metadata, read `mcpServers` from `.mcp.json` (project) and `~/.claude.json`
 
 ## Verify
 
-`/mcp` → **drill into the server entry** (arrow into it, not just the top-level
-row) → read `Capabilities:`. It MUST list at least one tool. Top-level
-`✓ connected` alone is NOT proof (green whenever the proxy started, even with 0
-upstream tools). Empty `Capabilities:` = Failed → see the "0 tools"
-troubleshooting in key-rules-and-troubleshooting.md.
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: you run `/mcp` → **drill into the
+server entry** (arrow into it, not just the top-level row) → read
+`Capabilities:`. Do not ask the user to report `Capabilities:`.
+
+Success: `Capabilities:` lists at least one upstream tool. Top-level `✓ connected`
+alone is not success (green whenever the proxy started).
+
+Empty tool list: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Approval / stuck-state precedence
 
@@ -424,26 +430,25 @@ match `^[a-zA-Z0-9_-]+$`), or an untrusted project config.
 
 ## Verify
 
-Run `/mcp` in the Codex TUI (or check the IDE extension's MCP view) and confirm
-the server exposes the upstream MCP's **real tools**. `codex mcp list` shows the
-server and its auth status but is NOT proof of working tools - the Agent Guard
-proxy can report up with 0 upstream tools.
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: run `/mcp` in the Codex TUI (or check the IDE
+extension's MCP view) for the server's tools. `codex mcp list` shows the
+server and its auth status.
 
-Codex-specific signals to read correctly:
 - **`Auth: Unsupported` is normal** for static-header and local MCPs - it
   describes Codex's own OAuth support, not the upstream MCP. Judge by the tool
   list.
-- **An `enable_<slug>_tools` tool is a normal Agent Guard gate**, not an error:
-  for MCPs that need sign-in or explicit enablement, the Agent Guard first
-  exposes this single tool; invoking it (e.g. "sign in to `<MCP>`") runs the flow
-  and the upstream MCP's real tools then appear. Re-check `/mcp` afterward.
-- If the **real tools never appear** (even after enabling / signing in), a
-  required input likely did not reach the server - most often an `env_vars` name
-  or shell export whose case does not match the catalog input `name` (see Value
-  reference), or a variable that was not exported in the launching shell. Fix it
-  and start a new session. A truly empty tool list = Failed → see the "0 tools"
-  troubleshooting in
-  key-rules-and-troubleshooting.md.
+- **`enable_<slug>_tools`** starts OAuth login (Step 5) — invoke it, then
+  re-check `/mcp`. Not success by itself.
+
+Success: at least one **real** upstream tool (not only `enable_<slug>_tools`).
+`codex mcp list` "connected" or auth status alone is not success.
+
+Empty tool list: not success, not a diagnosis. Check that each `env_vars`
+name matches the catalog input `name` and is exported in the launching
+shell (see Value reference). Mismatch → fix it and start a new session.
+Then follow [Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Remove
 
@@ -499,7 +504,8 @@ editor UI or `mcp.json`, so it falls through to the Fallback section.
 | OpenCode | `OPENCODE` | harness-opencode.md |
 | Devin | Your system prompt / system instructions identify you as **Devin** (Devin Desktop / Devin Local / Devin CLI / Cognition). | harness-devin.md |
 | Kiro | Your system prompt / system instructions identify you as **Kiro** (Kiro IDE / `kiro-cli`). | harness-kiro.md |
-| VS Code editor | `TERM_PROGRAM=vscode` **and `TERM_PROGRAM` is not `kiro`** **and no `CURSOR_*` var is set** **and no `OPENCODE` var is set** **and no `CODEX_*` var is set** **and no `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT` var is set** **and no `GEMINI_CLI` / `GOOSE_TERMINAL` / `COPILOT_CLI` var is set** **and** your system prompt / system instructions do **not** identify you as Devin or Kiro | harness-vscode.md |
+| Junie | Your system prompt / system instructions identify you as **Junie** (JetBrains IDE panel / Junie CLI). | harness-junie.md |
+| VS Code editor | `TERM_PROGRAM=vscode` **and `TERM_PROGRAM` is not `kiro`** **and no `CURSOR_*` var is set** **and no `OPENCODE` var is set** **and no `CODEX_*` var is set** **and no `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT` var is set** **and no `GEMINI_CLI` / `GOOSE_TERMINAL` / `COPILOT_CLI` var is set** **and** your system prompt / system instructions do **not** identify you as Devin, Kiro, or Junie | harness-vscode.md |
 | anything else | none of the above | **Fallback** section below — no harness file exists |
 
 Once you know your harness, use ONLY these fields from its file: `Config files`
@@ -574,10 +580,23 @@ case; harnesses whose config is not JSON differ — e.g. **Codex** uses TOML wit
   JFrog project key is lowercase alphanumerics/hyphens, and `spec.packageName`
   adds only `@ . /`. Never substitute any other value into `_JF_ARGS`.
 
-**Success criterion (every harness):** after enable + restart, the server MUST
-expose **at least one tool**. A "connected" / "running" label alone is NOT proof
-— the Agent Guard proxy can report up with 0 upstream tools. An empty
-tool/capability list = Failed.
+**Success criterion (every harness):** success = at least one upstream tool
+from that server that you can see or call, not a connected/running
+indicator. Agent Guard can show connected with 0 upstream tools.
+`enable_<slug>_tools` starts that server's OAuth login (Step 5) — invoke
+it, then re-check. It is not an upstream tool.
+
+1. If you can already see or call at least one upstream tool from this
+   server, that is success. Stop. Do not ask the user to check a tool
+   count for you; tools you can already use are enough.
+2. If you cannot, that is not a failure. Some harnesses inject tools as
+   soon as the MCP is up; some only after Restart. Follow the **Verify**
+   section in the harness file. Ask the user only when that section
+   tells you to.
+
+Still no tools after that check: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 **OAuth cache (every harness):** OAuth `--login` caches tokens in
 `~/.jfrog/jfrogmcp.conf.json` regardless of harness; removal cleanup of that
@@ -647,19 +666,25 @@ never enabled — re-run Enable.
 
 ## Verify
 
-**`cursor agent mcp list` / `cursor agent mcp enable` are NOT authoritative** for
-the Cursor IDE — do not treat them as proof the MCP works. The only proof is that
-tool descriptor files are actually present at:
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: after `Developer: Reload Window`,
+check that tool descriptor files exist at:
 
 ```
 ~/.cursor/projects/<this-workspace>/mcps/<mcp-server-name>/tools/*.json
 ```
 
 (`<mcp-server-name>` is the JSON key of the MCP, optionally prefixed `user-`.)
-NEVER ask the user to inspect these files themselves — after they enable the MCP,
-**offer to check the `tools/` directory for them**. If `tools/` is empty or
-missing after a `Developer: Reload Window`, treat as Failed → see the "0 tools"
-troubleshooting in key-rules-and-troubleshooting.md.
+**`cursor agent mcp list` / `cursor agent mcp enable` are not the check** for
+the Cursor IDE. NEVER ask the user to inspect these files — **offer to check
+the `tools/` directory for them**.
+
+Success: at least one upstream tool from this server you can see or call, or at
+least one `*.json` in that `tools/` directory.
+
+Empty tool list: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Notes
 
@@ -831,24 +856,24 @@ only.
 ## Verify
 
 Before treating a missing server as Failed, confirm the entry is in the active
-store for this harness (user `~/.config/devin/mcp_config.json` by default).
+store (user `~/.config/devin/mcp_config.json` by default).
 
-After the user completes Restart (see Restart), run `devin mcp list` for connection status,
-then **list that server's live tools** through the connected MCP (Devin CLI and
-Devin Desktop Local).
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: after the user completes Restart,
+run `devin mcp list` for connection status, then
+**list that server's live tools** through the connected MCP (Devin CLI and
+Devin Desktop Local). On first connect without cached OAuth, Devin opens a
+browser to sign in; later runs reuse stored credentials. Devin Local and Devin
+CLI may prompt to approve each MCP tool call by default — grant the prompt
+before listing tools.
 
-The server MUST expose **at least one tool**. A connected indicator alone is
-NOT proof — the Agent Guard proxy can report connected with 0 upstream tools.
-Empty tool list = Failed → see the "0 tools" troubleshooting in
-key-rules-and-troubleshooting.md.
+Success: the live tool list from the connected server has at least one
+upstream tool. A connected indicator alone is not success. Do **not** treat a
+tool list scraped from npm / GitHub docs as verification.
 
-Do **not** treat a tool list scraped from npm / GitHub docs as verification —
-only a live tool list from the connected server counts.
-
-On first connect without cached OAuth, Devin opens a browser to sign in; later
-runs reuse stored credentials. Devin Local and Devin CLI may prompt to approve
-each MCP tool call by default — grant the prompt before treating an empty list
-as a failure.
+Empty tool list: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Notes
 
@@ -856,6 +881,103 @@ as a failure.
   either surface is visible to the other after the appropriate restart.
 - OAuth `--login` caches tokens in `~/.jfrog/jfrogmcp.conf.json` (same as all
   harnesses); removal cleanup of that file is the same everywhere.
+
+
+## harness-junie
+
+# Harness: Junie
+
+Junie-specific config for the `jfrog-mcp-management` skill (JetBrains IDE panel
+and the Junie CLI). Read this together with harness-common.md
+(shared entry shape and success criterion). You reached this file because Step A
+matched **Junie**: your system prompt / system instructions identify you as
+Junie. Config is the same on both surfaces.
+
+> **Junie doesn't interpolate `${VAR}` / `${input:…}`** and has no first-start
+> prompt, so secrets come from the inherited process environment, not references
+> — keep the command canonical (`npx … @jfrog/agent-guard`), never a `/bin/sh`
+> wrapper. `node`, `npx`, and `jf` must be on Junie's `PATH`; if any is "command
+> not found" (mainly macOS), the user adds them and restarts — see the JFrog
+> JetBrains plugin README → **Troubleshooting**.
+
+## Config files
+
+- **Default scope: user-level.** `~/.junie/mcp/mcp.json` (Windows:
+  `%USERPROFILE%\.junie\mcp\mcp.json`) — personal, applies to every project, read
+  by both the IDE panel and the CLI, and where the JFrog plugin writes the
+  bundled `jfrog` server. Create if missing: `{ "mcpServers": {} }`.
+- **Project:** `.junie/mcp/mcp.json` in the project root — ONLY if the user says
+  "for this project" / "commit" / "share" (shareable via git).
+- Write to exactly one scope; don't ask which unless the user brings it up.
+
+## Top-level key
+
+`mcpServers`
+
+## Value reference (env / secrets)
+
+Junie doesn't interpolate `${VAR}` / `${input:…}`, so any input value comes from
+the **process environment** the Agent Guard inherits — it reads each catalog
+input/header by its **exact name** (case-sensitive), so the value need not appear
+in `mcp.json`.
+
+- **Non-secret** inputs → literals in the `env` map (e.g. `_JF_ARGS`).
+- **OAuth** remote MCPs → no static secret; run `--login` (SKILL.md Step 5).
+- **Static secret** (`isSecret=true`) → NEVER a literal or wrapper. The user
+  exports it under the input's exact name into Junie's environment (e.g.
+  `export Authorization="Bearer <token>"` before `idea .`, or `launchctl setenv`
+  for a GUI launch) and restarts. You never see or type the value.
+
+> If the tool list stays empty after a static-secret export, Junie isn't
+> forwarding that variable on this platform — see the "0 tools" entry in
+> key-rules-and-troubleshooting.md.
+
+## JFrog credentials — from the `jf` config
+
+Junie may not forward ambient shell env to the MCP subprocess, so authenticate
+JFrog via the on-disk `jf` config: **always include `--server <SERVER_ID>` in
+`args`** (resolve `<SERVER_ID>` per agent-guard-common.md)
+so the Agent Guard reads that server's URL + token from `~/.jfrog/` — do not omit
+it even with a single `jf` server. Don't rely on `JFROG_URL` /
+`JFROG_ACCESS_TOKEN` here — Junie may not forward them.
+
+## Enable
+
+Junie picks up `mcp.json` automatically. If a newly added server does not appear,
+open **Settings → Tools → Junie → MCP Settings** and confirm it is listed/enabled.
+
+## Restart
+
+Reloads on save; if the new server does not surface, start a new Junie task or
+restart the IDE.
+
+## List installed
+
+Read `mcpServers` from `~/.junie/mcp/mcp.json` (user) and `.junie/mcp/mcp.json`
+(project). For live status, open **Settings → Tools → Junie → MCP Settings** —
+each configured server and its discovered tools are listed there. There is **no**
+interactive `/mcp` command (typing `/mcp` in chat is plain text). Render an
+installed / `--list-available` result back to the user as a numbered table.
+
+## Verify
+
+The only proof is tools appearing under the server in **Settings → Tools → Junie
+→ MCP Settings**. A "connected" label with 0 tools = Failed → see the "0 tools"
+troubleshooting in key-rules-and-troubleshooting.md.
+
+## Notes
+
+- The **JFrog project key is always required** — for catalog calls
+  (`--list-available` / `--inspect`, as `--project <JFROG_PROJECT_KEY>`) **and
+  install** (the written entry's `_JF_ARGS` carries `project=<JFROG_PROJECT_KEY>`).
+  Resolve it per agent-guard-common.md **before the first
+  call**, same as every harness. Junie has no native prompt, so ask in plain text
+  if it's unresolved, or have the user set `JF_PROJECT` in Junie's environment.
+- Installed MCPs are ALWAYS the stdio Agent Guard entry from
+  harness-common.md — never a top-level `url` (that bypasses
+  the Agent Guard), even though Junie's `mcp.json` accepts `url` servers.
+- On remove, if the entry used an exported secret, tell the user they can unset
+  it; never echo the value.
 
 
 ## harness-kiro
@@ -925,17 +1047,21 @@ var exported after Kiro is already running won't resolve until you relaunch.
 
 ## Verify
 
-- **`kiro-cli`:** `kiro-cli mcp status --name <name>` for connection status,
-  then confirm real tools via `/mcp` in the same chat session (lists each
-  active server's tools).
-- **Kiro IDE:** tell the user to type `/mcp` in the chat — it lists each
-  active server's tools directly, so they can drill into the target server.
-  Do not invoke it as a tool yourself.
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise:
 
-A connected/active status alone is NOT proof — the Agent Guard proxy can
-report up with 0 upstream tools. Empty tool list = Failed, see the "0 tools"
-troubleshooting in
-key-rules-and-troubleshooting.md.
+- **`kiro-cli`:** `kiro-cli mcp status --name <name>` for connection status,
+  then confirm tools via `/mcp` in the same chat session (lists each active
+  server's tools).
+- **Kiro IDE:** tell the user to type `/mcp` in the chat — it lists each
+  active server's tools. Do not invoke it as a tool yourself.
+
+Success: `/mcp` lists at least one upstream tool for the server. Connected/active
+status alone is not success.
+
+Empty tool list: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 
 ## harness-opencode
@@ -1075,24 +1201,23 @@ section - do NOT print, log, or return the whole file or unrelated config values
 
 ## Verify
 
-Confirm the server exposes the upstream MCP's **real tools** (they appear to the
-agent as `<sanitized-server-name>_<tool>`). `opencode mcp list` shows connection
-status, but a "connected" row is NOT proof - the Agent Guard proxy can report up
-with 0 upstream tools.
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: confirm tools via the names the agent sees:
+`<sanitized-server-name>_<tool>`. `opencode mcp list` shows connection status.
 
-- **An `enable_<slug>_tools` tool is a normal Agent Guard gate**, not an error:
-  for MCPs that need sign-in or explicit enablement, the Agent Guard first
-  exposes this single tool; invoking it (e.g. "sign in to `<MCP>`") runs the flow
-  and the upstream MCP's real tools then appear. Re-check afterward. (OpenCode's
-  own `opencode mcp auth` is for `type: "remote"` OAuth servers only and does NOT
-  apply to this local Agent Guard entry.)
-- If the **real tools never appear** (even after enabling / signing in), a
-  required input likely did not reach the server - most often an `environment`
-  name or shell export whose case does not match the catalog input `name` (see
-  Value reference), or a variable that was not exported in the launching shell.
-  Fix it and start a new session. A truly empty tool list = Failed → see the
-  "0 tools" troubleshooting in
-  key-rules-and-troubleshooting.md.
+`enable_<slug>_tools` starts OAuth login (Step 5) — invoke it, then
+re-check. Not success by itself. (OpenCode's own `opencode mcp auth` is for
+`type: "remote"` OAuth servers only and does NOT apply to this local Agent
+Guard entry.)
+
+Success: at least one **real** upstream tool (not only `enable_<slug>_tools`).
+`opencode mcp list` "connected" alone is not success.
+
+Empty tool list: not success, not a diagnosis. Check that each
+`environment` name matches the catalog input `name` and is exported in
+the launching shell (see Value reference). Mismatch → fix it and start
+a new session. Then follow [Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Remove
 
@@ -1210,10 +1335,18 @@ started — re-run Enable.
 
 ## Verify
 
-Ask the user to confirm in `MCP: List Servers` that the server is **Running with
-at least one tool**. "Discovered 0 tools" is NOT healthy — the Agent Guard
-started but the upstream MCP didn't. Treat 0 tools as Failed → see the "0 tools"
-troubleshooting in key-rules-and-troubleshooting.md.
+If you can already see or call at least one upstream tool from this
+server, skip this check. Otherwise: Enable / Restart if that has not
+happened, then check this session again. Only then ask the user to open
+`MCP: List Servers` and say whether the server is up. Do not ask them
+for a tool count.
+
+Success: at least one upstream tool from this server is available to you.
+The server being up is not success.
+
+Empty tool list: not success, not a diagnosis — follow
+[Connected but 0 tools](key-rules-and-troubleshooting.md#connected-but-0-tools).
+Do not invent another debug path until that section is finished.
 
 ## Remove cleanup
 
@@ -1232,9 +1365,11 @@ echo any stored value.
 
 A wrong stored secret is cleared via the **Clear** CodeLens above the matching
 `inputs` entry in `mcp.json`; then restart the server and VS Code re-prompts.
-Several steps here (Start, entering inputs, checking `MCP: List Servers`) are
-UI-only **user** actions — ask the user to do them; editing `mcp.json` and
-running the agent guard commands are your steps.
+Several steps here (Start, entering inputs) are UI-only **user** actions —
+ask the user to do them. Editing `mcp.json`, running the agent guard
+commands, and checking this session's tools are your steps. `MCP: List
+Servers` only when you cannot see tools yourself, or when they ask whether
+a server is running — do not ask them for a tool count.
 
 
 ## key-rules-and-troubleshooting
@@ -1338,25 +1473,71 @@ as the MCP proxy.
    Carve-out: `--login` `expected 401, got 200` is anonymous MCP — ignore, not
    this bucket.
 
+## Connected but 0 tools
+
+The harness shows the server connected/running but this agent still has no
+tools from that server (none you can see or call). Agent Guard (the proxy)
+is up; upstream tools are not visible. Do not report success. If this
+session already has an upstream tool from that server, this section does not apply.
+
+Run the steps in order. Do not skip a step, including because you think you
+already know the answer. When a step says re-run **Verify**,
+use this harness's **Verify** section. Do not invent another
+check, script, or debug path until these steps are finished.
+
+Expected flow: when the upstream is ready, Agent Guard sends MCP
+`tools/list_changed` and the harness updates the tool list. Re-check this
+harness's **Verify**. If the harness does not hot-refresh, the user must
+apply that harness's **Restart**.
+
+**Restart** means the action in this harness's **Restart** section (new
+agent session / reload). It does not mean rebooting the machine or a
+separate MCP-only command.
+
+Typical reasons:
+- Upstream still starting (download, install, first launch).
+- Not allowed in this JFrog project (allowlist is dynamic).
+- Upstream failed to start (missing env, expired token, runtime/spawn error).
+- The harness session was not running. Agent Guard and the upstream start
+  when the harness starts — waiting with it closed does not count.
+
+Steps:
+1. If the config changed and this harness's **Restart** has not run since,
+   do that first.
+2. Re-run Verify (including now). ≥1 tool → success. Stop.
+3. List → Available to install (`--list-available`). Confirm this MCP is
+   still in the catalog for this project. A recent `--inspect` is not this
+   check — allowlist membership is dynamic, and a wrong project key looks
+   the same as one that is still starting.
+4. Re-run Verify. ≥1 tool → success. Stop.
+5. Still empty: **stop**. Do not gather logs in this turn. Tell the user
+   once that after Restart the upstream may take up to a few minutes. 
+   They can say **check again**. Do not guess how long, and
+   do not send them away to wait. If they waited with the harness closed,
+   the MCP was not running — the wait starts after Restart.
+6. After **check again**, or if they ask to debug further: re-run Verify.
+   ≥1 tool → success. Stop. How long it has already been is not a
+   diagnosis.
+7. Still empty with the harness running after Restart — gather logs:
+   - Set `JF_AGENT_GUARD_LOG_LEVEL=debug` on the Agent Guard entry's env,
+     then Restart, and read Agent Guard stderr.
+   - If the harness has a debug mode (e.g. Claude Code `claude --debug`),
+     relaunching in that mode can add more log output.
+   From stderr:
+   - **OAuth (remote)** — re-run `--login`.
+   - **Static-token (remote)** — this harness's **Value reference** is set.
+   - **Local (stdio)** — spawn/runtime error.
+   Last resort: run the same command as the config entry in a terminal
+   (`npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard` plus that
+   entry's `--server` / `_JF_ARGS`, with `JF_AGENT_GUARD_LOG_LEVEL=debug`).
+   This is an MCP stdio process — it will block until you stop it. Read
+   stderr. Do not start by writing a wrapper script.
+
 ## Troubleshooting
 
 Items below are harness-agnostic unless they point into the current harness's
 row in harness-common.md.
 
-- **"connected" but 0 tools** (empty tool/capability list in the harness's
-  verify view — e.g. Claude Code's `/mcp` `Capabilities:`) — agent guard proxy
-  started, upstream MCP did not. A "connected" label is misleading here. NEVER
-  report success when there are 0 tools.
-  1. Relaunch in the harness's debug mode if it has one (e.g. Claude Code:
-     `claude --debug`) and read the agent guard stderr; diagnose by MCP type:
-     - **OAuth (remote)** — re-run the OAuth login (`--login`); refresh token
-       likely expired.
-     - **Static-token (remote)** — confirm every `${VAR}` in `env` is exported
-       in the launching shell and the token is still valid.
-     - **Local (stdio)** — check that the bundled binary actually launched
-       (agent guard stderr will show the spawn error).
-  2. Verify that the MCP server is still allowed. See the skill's "Available to
-     install" flow.
 - **An MCP was installed as a `stdio` Agent Guard entry although Gateway
   routing is expected** — this is the designed fallback, not a failure.
   `--inspect` returns anything other than
@@ -1372,7 +1553,7 @@ row in harness-common.md.
   why, the reason is on stderr: re-run the Step 2 `--inspect` command with
   `JF_AGENT_GUARD_LOG_LEVEL=debug` exported and read the single eligibility
   record it prints. Never paste an access token from that output.
-- **Configured server missing from the harness's list/verify view** —
+- **Configured server missing from the harness's list or Verify** —
   rejected/pending. Re-run the enable/verify step (Install → Step 4a).
 - **MCP still appears as approved (or won't go away) after editing the config**
   — on harnesses that pre-approve via files (e.g. Claude Code), approval state
