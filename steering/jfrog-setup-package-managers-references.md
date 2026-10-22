@@ -87,8 +87,13 @@ When you look up a package manager in this file, you get one of:
 | **resolved (trusted)** | `repositories.<pkg>` present, `source` is `agents-config` | Key from agents-conf.json with `verifyRepos: false` | **No** |
 | **unresolved** | `repositories.<pkg>` is missing | No mapping in agents-conf.json, verify failed, or type not configured | n/a |
 
-The skill relies on `jf setup --repo` to validate the repo key at apply
-time (`GET /api/repositories/<repoKey>` inside the CLI).
+The skill relies on `jf setup --repo` to validate that the repo exists at apply
+time (`GET /api/repositories/<repoKey>` inside the CLI). Before that, every
+value read from this file, the session table, or the workspace binding goes
+through `~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh --repo "$raw"`. A key that fails
+`^[A-Za-z0-9._-]+$` (APR `isSafeRepoKey`) is not usable — stop and ask. Do not
+paste it into a shell command, including inside single quotes. The shell
+parses that line before `jf` starts.
 
 ## Reading the cache from the skill
 
@@ -96,11 +101,13 @@ The current `serverId` for this session comes from `jf config export`
 (the default server). Read the cache with:
 
 ```bash
-SID="$(jf c show --server-id 2>/dev/null | awk '/Server ID/ {print $3; exit}')"
+sid_raw="$(jf c show --format=json | jq -r 'map(select(.isDefault))[0].serverId // empty')"
+SID="$(bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh --server-id "$sid_raw")" || SID=""
 CACHE="$HOME/.jfrog/skills-cache/package-resolution.json"
 
-# Get a repo key for a package type (empty if unresolved):
-jq -r --arg sid "$SID" --arg type "<pkgType>" '.servers[$sid].repositories[$type] // ""' "$CACHE"
+# Get a repo key for a package type (empty if unresolved). Pass "$raw"
+# to check-repo-key.sh. Do not copy this output into the command text.
+raw="$(jq -r --arg sid "$SID" --arg type "<pkgType>" '.servers[$sid].repositories[$type] // ""' "$CACHE")"
 
 # Dump every resolved (pkgType, repoKey) pair for this SID:
 jq -r --arg sid "$SID" '.servers[$sid].repositories | to_entries[] | "\(.key)\t\(.value)"' "$CACHE"
@@ -112,7 +119,8 @@ jq -r --arg sid "$SID" '.servers[$sid].source' "$CACHE"
 If `$CACHE` does not exist, or the SID branch is missing, the hook has
 not yet resolved on this machine for this server — fall back to reading
 the injected "Resolved URLs for this session" table in agent context
-(parse the URL to recover `repoKey`), and if that is also absent, treat
+(parse the URL to recover `repoKey`, then load it through the quoted heredoc
+in SKILL.md Step 3.4 — never into `raw="…"`), and if that is also absent, treat
 every package manager as `unresolved` and prompt the user (Step 2).
 
 The resolver refreshes stale entries on session start (TTL + agents-conf.json mtime).
@@ -136,9 +144,31 @@ install and server config: the `#jfrog` steering.
 
 ## Invocation
 
+Check the server id and repo key, then run `jf setup`. Load the server id from
+`jf c show` and the repo key with `jq -r`. Do not paste either into the
+command, including inside quotes (a quote in the value closes yours and the
+rest runs before the checker). If a checker exits non-zero, do not run
+`jf setup`.
+
 ```bash
-jf setup <package-manager> --server-id <SID> --repo <repo-key> [--project <project-key>]
+sid_raw="$(jf c show --format=json | jq -r 'map(select(.isDefault))[0].serverId // empty')"
+raw="$(jq -r --arg t "<type>" '.repositories[$t] // empty' "<binding-file>")"
+if SID="$(bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh --server-id "$sid_raw")" \
+  && REPO="$(bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh --repo "$raw")"; then
+  jf setup <package-manager> --server-id "$SID" --repo "$REPO"
+fi
 ```
+
+With a project, load `project_raw` through the quoted heredoc in SKILL.md
+Step 3.4, add
+`PROJECT="$(bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh --project "$project_raw")"`
+to the `if`, and pass `--project "$PROJECT"`. Typed text never goes into
+`raw="…"`.
+
+The shell parses a pasted value before `jf` starts. The checker trims its
+input and accepts only `^[A-Za-z0-9._-]+$` (APR `isSafeRepoKey`). `jf` then
+checks that the repository exists. Run the merge in this same shell so
+`$REPO` is still set.
 
 Always pass `--server-id` and `--repo`. Without `--repo`, multiple matching
 repos trigger an interactive prompt or error (`Please provide the repository
@@ -268,9 +298,14 @@ to-bind set, map it to a package type and compare
 
 | Case | Action |
 |---|---|
-| Missing type in `repositories` | Run `jf setup` and merge in Step 6. |
+| Missing type in `repositories` | Check the repo key, run `jf setup`, and merge in Step 6. |
 | Same repo key | **Skip** `jf setup` — hook already applies overrides on session start. |
 | Different repo key | Show diff and confirm via AskQuestion before overwriting. |
+| Value fails `^[A-Za-z0-9._-]+$` | Not the current binding. Do not diff it or pass it through. Stop and ask for a replacement key. Other types in the file stay usable. |
+
+APR's `normalizeWorkspaceConfig` drops the same unsafe keys when the hook
+reads this file. This skill applies that charset on Load because it also reads
+the file when the hook is absent. Run `~/.kiro/jfrog-scripts/jfrog-setup-package-managers/check-repo-key.sh` before `jf setup`.
 
 ### 2. Write / merge
 
@@ -280,9 +315,13 @@ JSON):
 ```bash
 bash ~/.kiro/jfrog-scripts/jfrog-setup-package-managers/merge-workspace-binding.sh \
   --package-manager <package-manager> \
-  --repo <repoKey> \
+  --repo "$REPO" \
   [--workspace-root <workspace-root>]
 ```
+
+`$REPO` is the key `check-repo-key.sh` printed in this same shell. Do not
+substitute the raw binding-file value, and do not paste that value into the
+checker command. Load it with `jq -r` into `$raw`, then pass `--repo "$raw"`.
 
 The script:
 
@@ -305,7 +344,7 @@ The script:
 | Consumer | What it reads |
 |---|---|
 | Session-start hook | `repositories` — first workspace root with this file (multi-root) |
-| This skill | Round-trip load → diff → confirm → `merge-workspace-binding.sh` |
+| This skill | Round-trip load → diff → confirm → `check-repo-key.sh` → `jf setup` → `merge-workspace-binding.sh` |
 | `opencode-jfrog-plugin` | **Not updated** — out of scope until it reads this file |
 
 Changing the `repositories` key semantics is a breaking change; coordinate

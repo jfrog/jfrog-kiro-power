@@ -28,7 +28,7 @@ hard-rule violation.
 
 - **Gotchas / caveats / do-don'ts**: **MUST** the `cli-gotchas` section of the `#jfrog-references` steering on Tier B — not replaceable by SKILL.md Tier A floor
 - **`jf api` prefixes / flags / GraphQL**: **MUST** the `jf-api` section of the `#jfrog-references` steering before `jf api`
-- **Temp files / `$$` / no re-fetch**: **MUST** the `preserving-command-output` section of the `#jfrog-references` steering before advanced I/O
+- **Temp files (private `mktemp -d` dir) / no re-fetch**: **MUST** the `preserving-command-output` section of the `#jfrog-references` steering before advanced I/O
 - **Namespaces / top-level cmds / Pipelines sunset**: **MUST** the `cli-command-discovery` section of the `#jfrog-references` steering when discovery beyond `--help`
 
 Tier C (when needed — not Tier B):
@@ -60,6 +60,7 @@ for one operation.
 
 - **Watches, policies, violations, components, or vulnerability scanning (concepts)**: read the `xray-entities` section of the `#jfrog-references` steering
 - **Exposures scanning results (secrets, IaC, service misconfigurations, application security risks)**: read the `xray-entities` section of the `#jfrog-references` steering § Exposures (Advanced Security)
+- **Scanning source code with SAST (`jf audit --sast`)**: read the `xray-sast-scan` section of the `#jfrog-references` steering
 - **Package install/resolve/download failure blamed on Curation — 403 from a curated remote, `ETARGET` / "no matching version", a version missing from the index, "why was package X blocked?", or a waiver after a block**: load the `jfrog-package-curation` workflow skill and follow its "Troubleshoot a failure" section (index-time CVS audit + download-time package audit → root cause + remediation, MCP only). Its "Check & download" section instead handles proactive "is this package safe to download?".
 - **Is this package safe / allowed / curated? Downloading npm, Maven, PyPI, Go, or similar packages via JFrog**: load the `jfrog-package-curation` workflow skill and follow its "Check & download" section.
 - **Curation audit events (approved/blocked packages, dry-run policy evaluations, curation export) without a failure to triage**: read the `xray-entities` section of the `#jfrog-references` steering § Curation audit events
@@ -92,7 +93,7 @@ for one operation.
 - **Batching, parallel Shell calls, or launching subagents**: read the `general-parallel-execution` section of the `#jfrog-references` steering
 - **Large or parallel data gathering, list-vs-detail APIs, cache hygiene**: read the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering
 - **Standalone HTML report with JFrog-aligned styling**: read the `jfrog-brand-html-report` section of the `#jfrog-references` steering
-- **Reusable gotchas from past tasks**: read or extend the `general-use-case-hints` section of the `#jfrog-references` steering
+- **Reusable gotchas from past tasks**: read the `general-use-case-hints` section of the `#jfrog-references` steering
 
 
 ## apptrust-entities
@@ -1624,7 +1625,7 @@ Three domains, different views of package + security data:
 | **Scope** | Global knowledge base + org overlay | Instance-scoped scanning | Instance-scoped storage |
 | **Security** | CVE advisories, EPSS, CVSS v2/v3/v4, known exploits | Watches, policies, violations | Vulnerability summary (deprecated) |
 | **Packages** | Public metadata (description, homepage, OpenSSF) | Components identified during scanning | Packages/versions stored in Artifactory |
-| **Access** | GraphQL only | REST + CLI (`jf api /xray/...`) | GraphQL only |
+| **Access** | GraphQL only | REST + CLI (`jf api /xray/api/...`) | GraphQL only |
 | **Use case** | Research, compliance reporting, package evaluation | Runtime enforcement, CI/CD gating | Inventory, location queries |
 
 
@@ -1694,10 +1695,10 @@ Hard rules and known failure modes:
   `[Info] Http Status: NNN` to **stderr** on every call; non-2xx also exits
   1 and adds `[Warn] jf api: <method> <url> returned NNN`. Pipe stdout to
   `jq` directly; **never `2>&1 | jq`** — stderr corrupts the JSON. To keep
-  diagnostics: `jf api <path> 2>/tmp/err-$$.log | jq .`.
+  diagnostics: `jf api <path> 2>"${JF_TMP:?}/<label>.err" | jq .`.
 - `jf api` has **no `-L`** (follow redirects) and **no `-o`** (output file).
   Save bodies with shell redirection
-  (`jf api ... > /tmp/out-$$.json`); for
+  to `${JF_TMP:?}` (`jf api ... > "${JF_TMP:?}/<label>.json"`); for
   binary downloads through the Artifactory remote proxy prefer `jf rt dl`,
   which handles the cache and redirect semantics natively.
 - Remote repository content is stored in a `-cache` suffixed repo. Properties
@@ -1733,6 +1734,11 @@ Hard rules and known failure modes:
   (especially the product prefix) and target server version. On any of
   these errors, do not try a different configured server as a workaround —
   that targets a different environment. Report the error and ask the user.
+- **No retry loops (HARD).** No `while true`; no empty `offset=`/`page=`.
+  403/404/timeout → stop. 401 → re-login **same** server, then **one** retry of that URL (sole identical-request exception). Identical path + query a **second** time → stop. First page `offset=0` or `page_num=1`.
+  Pager: 2xx and `next_offset` **greater than** last offset, or increment
+  `page_num`. Cap **20 pages**. No `GET /api/v1/artifacts`. AQL on
+  `<repo>-cache` (never `<virtual>-cache`). Package-block 403 → `jfrog-package-curation`.
 - **Xray contextual analysis:** the summary artifact response has two
   applicability fields — `applicability` (top-level, often null) and
   `applicability_details` (always present with a `result` string). **Use
@@ -1751,8 +1757,7 @@ Hard rules and known failure modes:
   lines to an NDJSON file, then `jq -s '.' file.ndjson` to produce the final
   array. See the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering.
 - Accumulated edge cases from real tasks live in the `general-use-case-hints` section of the `#jfrog-references` steering
-  — read when debugging odd failures; **append** a short entry when you confirm
-  a new, reusable gotcha.
+  — read when debugging odd failures (read-only; never edit skill files).
 
 
 ## general-bulk-operations-and-agent-patterns
@@ -1776,29 +1781,27 @@ detail-only — confirm via docs or sample GET before building on list alone.
   **Batch and parallel execution**).
 - Large work → chunks, parallel Shell, or subagents per tiering.
 - N+1 loop: wall time ≈ `N * 1.5s`; `block_until_ms` ≥ estimate + 30s.
-- > ~60 items: Shell + progress log (`>> /tmp/jf-progress-$$.log`).
+- > ~60 items: Shell + progress log (`>> "${JF_TMP:?}/progress.log"`).
 - Read-only independent items: Tier 2/3 (`general-parallel-execution.md`);
   rate limits; 4-8 parallel calls.
 
 ## Parallelism and shared files
 
-**Unsafe:** Concurrent processes appending to **same** file (JSONL, logs, ndjson)
-without sync → interleaved lines, broken parsers (JSON "Extra data" errors).
+**Unsafe:** Concurrent appends to the **same** file (JSONL, logs, ndjson)
+without sync → interleaved lines, JSON "Extra data" errors.
 
-**Safer:**
+**Safer:** write sequentially to one file; or one temp file per worker/chunk,
+then concatenate; or `flock` if one file must be shared.
 
-- Write sequentially to one file; or
-- One temp file per worker or chunk, then concatenate; or
-- Advisory locking (`flock`) if one file must be shared.
-
-Bulk API/CLI output: `/tmp` or `mktemp`; not `~/.jfrog/skills-cache/` except
+Bulk output: private `JF_TMP` dir; not `~/.jfrog/skills-cache/` except
 `jfrog-skill-state.json` and OneModel schema (main SKILL.md).
 
 ## Shell hygiene
 
 - `set -euo pipefail` in non-trivial scripts — failures not silent.
-- Unique temp paths (`$$` in filename) + **echo expanded path** for cross-call
-  reuse (SKILL.md **Preserving command output** — `$$` + echo, session ID, hardcoded patterns).
+- Temp files only in the private `mktemp -d` dir, echoed (SKILL.md
+  **Preserving command output**);
+  never predictable `/tmp` names.
 - Parse CLI/API JSON with **`jq`**.
 
 ## Safe multi-response collection
@@ -1851,12 +1854,12 @@ Multiple independent operations → use lightest parallelism tier:
 ## Tier 1: Batch within a single Shell call
 
 Combine independent commands with `&&`. All JFrog API calls share `jf api` +
-`jf config` server — batching is safe and efficient:
+`jf config` server — batching is safe (`JF_TMP`: **Preserving command output**).
 
 ```bash
-jf api /artifactory/api/repositories > /tmp/jf-repos-$$.json && \
-jf api /artifactory/api/system/ping    > /tmp/jf-ping-$$.json && \
-jf api /artifactory/api/storageinfo    > /tmp/jf-storage-$$.json
+jf api /artifactory/api/repositories > "${JF_TMP:?}/repos.json" && \
+jf api /artifactory/api/system/ping    > "${JF_TMP:?}/ping.json" && \
+jf api /artifactory/api/storageinfo    > "${JF_TMP:?}/storage.json"
 ```
 
 Cross-product reads (Access, Xray, etc.) batch the same way — same `jf api`
@@ -1868,17 +1871,14 @@ Multiple Shell tool calls in one message when commands are independent and
 concurrency cuts runtime:
 
 ```bash
-# Shell call 1 — echo the expanded path so the agent can reference it later
-OUT=/tmp/jf-repos-$$.json
-jf api /artifactory/api/repositories > "$OUT" && echo "$OUT"
+# Shell call 1 (set JF_TMP to the echoed dir in every call)
+JF_TMP=<session dir>
+jf api /artifactory/api/repositories > "${JF_TMP:?}/repos.json"
 
-# Shell call 2 (parallel) — same pattern, different PID
-OUT=/tmp/jf-users-$$.json
-jf api /access/api/v2/users/ > "$OUT" && echo "$OUT"
+# Shell call 2 (parallel) — new file name
+JF_TMP=<session dir>
+jf api /access/api/v2/users/ > "${JF_TMP:?}/users.json"
 ```
-
-Each parallel Shell call gets different PID → `$$` differs. Echo path for
-cross-call use (see SKILL.md **Preserving command output**).
 
 ## Tier 3: Parallel subagents
 
@@ -1911,7 +1911,8 @@ All three run concurrently. Parent merges into unified report.
 
 1. State goal clearly (e.g. "Collect all Xray policies and watches").
 2. Exact commands, or API tier + `--help` discovery.
-3. Save to `/tmp/jf-<label>-$$.json`, echo expanded path, return structured summary.
+3. Pass the parent's session dir; save to `<dir>/subagent-N-<label>.json`
+   (N = index; never delete the dir); return a summary.
 4. Specify return fields (counts, lists) so parent need not re-read raw data.
 
 ### Subagent type selection
@@ -1924,11 +1925,10 @@ All three run concurrently. Parent merges into unified report.
 
 | Scenario | Tier |
 |----------|------|
-| 2–5 independent reads, same server | 1 (single Shell) |
+| 2–5 independent reads or a simple one-shot fetch | 1 (single Shell) |
 | Many independent reads where concurrency cuts total runtime | 2 (parallel Shell) |
 | Full platform audit, multi-section report, cross-server comparison | 3 (subagents) |
 | Task branches need different reference files or reasoning | 3 (subagents) |
-| Simple one-shot data fetch | 1 (single Shell) |
 
 ## When NOT to parallelize
 
@@ -1940,19 +1940,19 @@ All three run concurrently. Parent merges into unified report.
 
 ## Aggregating many outputs (JSONL, logs, ndjson)
 
-Do **not** have multiple background processes append **unsynchronized** to the
-same file — lines interleave, corrupt machine-readable output. Prefer sequential
-writes, one file per worker/chunk then concatenate, or file locking.
-See the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering.
+No unsynchronized concurrent appends to one file (interleaved lines corrupt
+output): one file per worker/chunk, then concatenate. See
+the `general-bulk-operations-and-agent-patterns` section of the `#jfrog-references` steering.
 
 
 ## general-use-case-hints
 
-# Use-case hints (living log)
+# Use-case hints
 
 Symptoms, causes, and mitigations discovered while using this skill on real
-tasks. **Append** a new row when you confirm a novel issue (any product or
-workflow). Keep entries short and actionable.
+tasks (any product or workflow). Read-only reference — do not edit this file
+or other skill files at runtime. If you confirm a new reusable gotcha, tell the
+user and suggest they propose it via a PR to the skills repo.
 
 | Area | Symptom | Cause | Mitigation | Notes |
 |------|---------|-------|------------|-------|
@@ -1961,20 +1961,10 @@ workflow). Keep entries short and actionable.
 | Access / Projects | Project groups list looks empty in code | Response may use `members` for the group entries, not `groups` | Accept both keys when parsing | See `projects-api.md` |
 | Bulk detail fetches | `jq` parse error ("Extra data" or "Invalid ...") on slurped detail array | One or more detail GETs returned empty/HTML/error body; `jq -s` chokes on non-JSON mixed in | Validate each response with `jq -e .` before appending; write error placeholder for failures; see `general-bulk-operations-and-agent-patterns.md` | Applies to any per-item loop (repos, builds, users) |
 | Agent timeouts | Shell job silently moves to background; no captured output | `block_until_ms` too low for N sequential API calls (~1-2s each) | Estimate `N * 1.5s + 30s` buffer; set `block_until_ms` accordingly; or use parallel execution | Default 30s insufficient for >20 items |
-| Sandbox + workspace writes | Generated report JSON or HTML not written; script exits 0 but file missing | Sandbox blocks some paths; agents sometimes wrongly target `~/.jfrog/skills-cache/` for scratch files (disallowed — only state + schema belong there) | Write reports and API responses under `/tmp` or the user workspace; only the two allowed cache files (`jfrog-skill-state.json`, `onemodel-schema-<id>.graphql`) belong in `~/.jfrog/skills-cache/` | `skills-cache/` is not a temp directory; see SKILL.md **`~/.jfrog/skills-cache/` — allowed files only** |
+| Sandbox + workspace writes | Generated report JSON or HTML not written; script exits 0 but file missing | Sandbox blocks some paths; agents sometimes wrongly target `~/.jfrog/skills-cache/` for scratch files (disallowed — only state + schema belong there) | Write reports and API responses inside a private `mktemp -d` dir or the user workspace; only the two allowed cache files (`jfrog-skill-state.json`, `onemodel-schema-<id>.graphql`) belong in `~/.jfrog/skills-cache/` | `skills-cache/` is not a temp directory; see SKILL.md **`~/.jfrog/skills-cache/` — allowed files only** |
 | `jf api` and redirects | Responses are empty or contain redirect HTML instead of expected content | `jf api` does not expose `-L`; it follows the redirect chain the Artifactory REST API returns by default but will not transparently hop across an unexpected 3xx to a binary URL | For remote-repo artifact content (e.g. fetching a file via `/artifactory/<repo>/<path>`), use `jf rt dl` instead of `jf api` — it handles 302s to CDN hosts. Reserve `jf api` for REST metadata/operation endpoints. | Applies when reading artifact **content**, not REST metadata |
 | Curation testing | `jf curation-audit` or `jf npm install` through a curated remote shows 1 download for the tested package even though no user downloaded it | The curation test itself fetches the package through Artifactory, which creates a cache entry and increments download stats | Account for this in download history analysis — the download was the curation test, not a real consumer pull | Also applies to `jf npmc` + `jf npm install` flows |
 | Agent-invented mutations | Agent copies or moves artifacts into a local repo to satisfy a precondition for a different operation (e.g., copy a package so evidence can be created on it) | Requested operation failed because the artifact was not in the specified repo; agent treated "put it there" / "make it work" as permission to invent the artifact | **Never** copy, move, upload, or create-repo to work around a failed precondition — stop and report the gap. A workaround ask is not permission. See SKILL.md Cautious execution rule 5 | Copying into a local repo can silently change virtual repo resolution for all consumers, trigger replication, and affect Xray indexing |
-
-## How to extend this file
-
-1. Reproduce the issue once on a real server or fixture.
-2. Add one table row (or a short new subsection if the table is a poor fit).
-3. Prefer general wording so the next use case on a different product still benefits.
-4. Before appending, scan existing entries for duplicates or near-duplicates —
-   update the existing row instead of adding a new one.
-5. Keep this file under 80 rows. If it grows beyond that, consolidate related
-   entries or promote recurring patterns into the relevant reference file.
 
 
 ## jf-api
@@ -1990,7 +1980,8 @@ endpoints, auto-authenticated against the resolved server. **Do not use
 ## Product-prefix table
 
 `jf api` requires the **full** path including the product prefix; omitting it
-returns 404.
+returns 404. Never invent `GET /api/v1/artifacts`. Cursor is `offset=0` or
+Xray `page_num=1`. Loops / 401 / 403 → `cli-gotchas.md`.
 
 | Product | Path prefix |
 |---------|-------------|
@@ -2029,7 +2020,7 @@ before running `jq` on it.
 
 ```bash
 QUERY='{ evidence { searchEvidence(first: 5, where: { hasSubjectWith: { repositoryKey: "my-repo-local" } }) { totalCount } } }'
-PAYLOAD=/tmp/onemodel-payload-$$.json RESPONSE=/tmp/onemodel-$$.json
+PAYLOAD="${JF_TMP:?}/evidence-payload.json" RESPONSE="${JF_TMP:?}/evidence.json"
 jq -n --arg q "$QUERY" '{query:$q}' > "$PAYLOAD"
 jf api /onemodel/api/v1/graphql -X POST \
   -H "Content-Type: application/json" --input "$PAYLOAD" > "$RESPONSE"
@@ -2146,8 +2137,10 @@ After installation, run `jf --version` to confirm, then
 
 ## Upgrading the JFrog CLI
 
-If the environment check reports a newer version is available, inform the user
-and offer to upgrade:
+On `NEWER_AVAILABLE`, run
+`bash ~/.kiro/jfrog-scripts/jfrog/cli-newer-version-offer.sh --clear` immediately.
+Never interrupt the task: finish the user's task first, then offer the upgrade
+as the last line of the reply. Upgrade only after the user says Yes:
 
 ```bash
 # macOS
@@ -2173,7 +2166,7 @@ When to read this file:
 - Need **GraphQL (OneModel)** entry points (workflow, examples, patterns) —
   see [GraphQL (OneModel)](#graphql-onemodel) below.
 
-After identifying domain, follow **Reference** column pointer for detailed definitions, relationships, agent rules.
+Then follow the **Reference** column pointer.
 
 ## Cross-product flow
 
@@ -2199,7 +2192,7 @@ flowchart TD
     Cat[Catalog] -.->|enriches metadata| SP
 ```
 
-Key takeaway: **artifacts** = atomic unit. Builds reference them, Xray scans them, release bundles collect them, distribution delivers them. **Applications** orchestrate top-level release flow. **Stored Packages** bridge artifacts → package abstraction. **Catalog** enriches packages with global security, legal, operational metadata. **Evidence** attests entities across all domains.
+Key takeaway: **artifacts** are the atomic unit; **Applications** orchestrate release flow; **Stored Packages** bridge artifacts to packages; **Catalog** enriches packages; **Evidence** attests across domains.
 
 ## GraphQL (OneModel)
 
@@ -2387,14 +2380,20 @@ Web login fails (old server, network restrictions):
 
 1. Ask user to generate token in JFrog UI:
   **Administration > Identity and Access > Access Tokens > Generate Token**
-2. Save non-interactively:
+2. Ask user to run in **their own terminal** (not via your shell tool, no `!`
+  prefix), pick **Access Token**, and paste the token at jf's hidden prompt
+  (add `--overwrite` if `<server-id>` already exists):
 
 ```bash
-jf config add <server-id> \
-  --url=https://<jfrog-url> \
-  --access-token=<token> \
-  --interactive=false
+jf config add <server-id> --url=https://<jfrog-url> --interactive
 ```
+
+3. After the user confirms, verify with
+  `jf api --server-id=<server-id> /artifactory/api/system/version`, then run
+  the Post-login handoff gate.
+
+Never ask for the token in chat or put it in a command — a command-line
+token is visible to other local users in process listings.
 
 ## Gotchas
 
@@ -2676,8 +2675,8 @@ Build the JSON body with `jq -n` into a **file**, then pass the file to
 ```bash
 QUERY='query GetEvidence($repoKey: String!, $path: String!, $name: String!) { evidence { getEvidence(repositoryKey: $repoKey, path: $path, name: $name) { evidenceId verified } } }'
 
-PAYLOAD_FILE="/tmp/onemodel-payload-$$.json"
-RESPONSE_FILE="/tmp/onemodel-response-$$.json"
+PAYLOAD_FILE="${JF_TMP:?}/get-evidence-payload.json"
+RESPONSE_FILE="${JF_TMP:?}/get-evidence.json"
 
 jq -n \
   --arg q "$QUERY" \
@@ -2809,14 +2808,13 @@ Cache: `${JFROG_CLI_HOME_DIR:-$HOME/.jfrog}/skills-cache/` (with `jf config`,
 
 1. **`onemodel-schema-${JFROG_SERVER_ID}.graphql`** — this workflow (supergraph
    SDL). **Always** use [Fetch the schema](#2-fetch-the-schema); never mirror
-   under `/tmp`.
+   into a temp dir.
 2. **`jfrog-skill-state.json`** — env check (main SKILL.md); scripts own it;
    do not delete/replace casually.
 
 **Never** store GraphQL **responses**, REST bodies, reports, or scratch under
-`skills-cache/`. Responses → `/tmp` with unique name (`$$`, `mktemp -d`) as in
-[Execute the query](#6-execute-the-query). `RESPONSE_FILE` must stay outside
-`skills-cache/`.
+`skills-cache/`. Responses → private `mktemp -d` dir ([Execute the
+query](#6-execute-the-query)).
 
 ## Prerequisites
 
@@ -2873,7 +2871,7 @@ Schema is large. Cache under skill cache (CLI home, outside installed skill),
 keyed by concrete `JFROG_SERVER_ID` from step 1 (CLI `serverId`, never a
 placeholder like `default`).
 
-**Always this exact path** — not `/tmp/` or elsewhere:
+**Always this exact path** — not a temp dir or elsewhere:
 
 `${JFROG_CLI_HOME_DIR:-$HOME/.jfrog}/skills-cache/onemodel-schema-${JFROG_SERVER_ID}.graphql`
 
@@ -3022,10 +3020,13 @@ response. **Do not** put `RESPONSE_FILE` under `~/.jfrog/skills-cache/` —
 schema + `jfrog-skill-state.json` only (see
 [`~/.jfrog/skills-cache/` policy](#jfrogskills-cache-policy)).
 
-Multiple queries in one shell → temp dir under `/tmp` + sequential names:
+Use `JF_TMP` (SKILL.md **Preserving command output**) with a per-flow
+subdirectory, creating `JF_TMP` first if this session has none yet (callers
+from other skills may reach here before it exists); echo both and re-set
+both (plus the counter) in each later call:
 
 ```bash
-ONEMODEL_TMPDIR=$(mktemp -d)
+JF_TMP=${JF_TMP:-$(mktemp -d)} && ONEMODEL_TMPDIR=$(mktemp -d "$JF_TMP/onemodel.XXXXXX") && printf 'JF_TMP=%q\nONEMODEL_TMPDIR=%q\n' "$JF_TMP" "$ONEMODEL_TMPDIR"
 ONEMODEL_QUERY_NUM=0
 ```
 
@@ -3033,7 +3034,7 @@ Before each query:
 
 ```bash
 ONEMODEL_QUERY_NUM=$((ONEMODEL_QUERY_NUM + 1))
-RESPONSE_FILE="$ONEMODEL_TMPDIR/response-$ONEMODEL_QUERY_NUM.json"
+RESPONSE_FILE="${ONEMODEL_TMPDIR:?}/response-$ONEMODEL_QUERY_NUM.json"
 ```
 
 #### Always use `jq` to build the JSON payload
@@ -3060,7 +3061,7 @@ Example — **small** query with `jq --arg`:
 
 ```bash
 QUERY='{ evidence { searchEvidence(first: 5, where: { hasSubjectWith: { repositoryKey: "my-repo-local" } }) { totalCount } } }'
-PAYLOAD_FILE="$ONEMODEL_TMPDIR/payload-$ONEMODEL_QUERY_NUM.json"
+PAYLOAD_FILE="${ONEMODEL_TMPDIR:?}/payload-$ONEMODEL_QUERY_NUM.json"
 jq -n --arg q "$QUERY" '{"query": $q}' > "$PAYLOAD_FILE"
 
 jf api /onemodel/api/v1/graphql \
@@ -3076,7 +3077,7 @@ Example — **nested** query from a file (preferred for real OneModel calls):
 
 ```bash
 # my-query.graphql contains a normal multi-line GraphQL document
-PAYLOAD_FILE="$ONEMODEL_TMPDIR/payload-$ONEMODEL_QUERY_NUM.json"
+PAYLOAD_FILE="${ONEMODEL_TMPDIR:?}/payload-$ONEMODEL_QUERY_NUM.json"
 jq -n --rawfile q my-query.graphql \
   '{"query": ($q | gsub("#.*"; "") | gsub("\\s+"; " ") | sub("^ +"; "") | sub(" +$"; ""))}' \
   > "$PAYLOAD_FILE"
@@ -4359,41 +4360,42 @@ jf api /artifactory/api/system/ping
 When a CLI command or API call returns data, redirect output to a temp file so
 you can re-read it without re-executing the call:
 
+**Once per session**, create a private temp dir (`mktemp -d`: mode 0700,
+unpredictable name) and echo it:
+
 ```bash
-OUT=/tmp/jf-repos-$$.json
-jf api /artifactory/api/repositories > "$OUT"
-echo "$OUT"
+JF_TMP=$(mktemp -d) && echo "$JF_TMP"
 ```
 
-Use `$$` (the shell PID) in the filename to prevent collisions across
-concurrent sessions or processes.
+Then write every response inside it (`${JF_TMP:?}` aborts if unset, else the
+path would start at `/`):
 
-**Cross-call gotcha:** each Shell tool invocation runs in a new process with a
-different PID, so `$$` expands to a different value in each call. Always
-**echo the expanded filename** so the agent can read it from the output and
-reuse the literal path in subsequent calls. Three patterns, in priority order:
+```bash
+JF_TMP=<dir echoed above>
+jf api /artifactory/api/repositories > "${JF_TMP:?}/repos.json"
+```
 
-1. **`$$` + echo** (preferred): use `$$` for collision safety, echo the path
-   as shown above. The agent reads `/tmp/jf-repos-12345.json` from the output
-   and passes that literal value to the next Shell call.
-2. **Session ID**: when many files share a prefix across calls, generate an ID
-   once (`SID=$(date +%s)-$$`), echo it, and reuse in later calls.
-3. **Hardcoded names**: last resort — risks collisions when parallel calls or
-   subagents write to the same path.
+**Cross-call gotcha:** each Shell call is a new process; variables do not
+survive. Set `JF_TMP` to the **echoed** literal at the start of every later
+call, with a distinct file name per call.
 
-This protects against wasted round-trips when you need to retry parsing — for
-example, if a `jq` filter fails or you extract the wrong field on the first
-attempt. Re-read the file instead of hitting the server again.
+**Never** write to fixed or PID-based (`$$`) names directly in shared `/tmp` —
+other local users can read or pre-create them.
+Only the creator removes the dir (`rm -rf "${JF_TMP:?}"`) when the whole task
+is done; subagents writing into it never delete it. After cleanup, run
+`mktemp -d` again — never recreate the old path. Subagent file names get an
+index prefix (`subagent-2-users.json`).
 
-Do **not** duplicate the same **network** request in a shell pipeline (e.g. with
-`||`) only to re-run `jq` or to reveal jq diagnostics—the duplicate call
-adds load on JFrog without fetching new data. Run
-`jq '<filter>' /tmp/jf-*-$$.json` (or redirect stdin from the file) instead
-of re-running the same `jf api` or other identical network-backed command.
+This avoids wasted round-trips when retrying parsing (a failed `jq` filter,
+wrong field): re-read the file instead of hitting the server again.
 
-Do **not** reuse saved output across unrelated steps or changed contexts (different
-server, user, or intent). The file is only valid for the immediate sequence of
-operations that motivated the original call.
+Do **not** repeat the same **network** request (e.g. via `||`) only to re-run
+`jq` or reveal jq diagnostics — it adds load on JFrog without new data. Run
+`jq '<filter>' "${JF_TMP:?}/<file>.json"` on the saved file instead.
+
+Do **not** reuse saved output across unrelated steps or changed contexts
+(server, user, intent); it is valid only for the sequence that motivated the
+original call.
 
 
 ## projects-api
@@ -4946,6 +4948,7 @@ Read when working with:
 
 CLI: `jf xr --help`, `jf audit --help`, `jf scan --help`.
 REST: `jf api /xray/api/v2/...` (see base skill *Invoking platform APIs with `jf api`*).
+SAST (`jf audit --sast`): the `xray-sast-scan` section of the `#jfrog-references` steering.
 
 ## Entity relationship overview
 
@@ -4970,8 +4973,7 @@ Core chain: **Watch** monitors **Resources** via **Policies**. When a
 
 ## Indexed resources
 
-Xray must **index** a resource before scan/monitor. Indexing decomposes
-artifacts into components and tracks them continuously.
+Xray must **index** a resource before scan/monitor.
 
 Indexable types:
 - **Repositories** — local and remote (Xray indexes the `-cache` for remotes)
@@ -4982,9 +4984,8 @@ Configure via Xray UI or `PUT /api/v1/binMgr/builds` / `PUT /api/v1/binMgr/repos
 
 ## Components
 
-Software package Xray identifies during scanning. Artifacts (JARs, Docker
-layers, npm tarballs, …) decompose into components mapped to vulnerability
-and license data.
+Package Xray identifies while scanning; artifacts (JARs, Docker layers, npm
+tarballs, …) decompose into components mapped to vulnerability and license data.
 
 IDs by package type:
 - Maven: `gav://group:artifact:version`
@@ -4996,8 +4997,6 @@ IDs by package type:
 
 ## Vulnerabilities
 
-Known security issue tied to specific component versions.
-
 | Field | Description |
 |-------|-------------|
 | `cve` | CVE identifier (e.g. `CVE-2021-44228`) |
@@ -5007,18 +5006,15 @@ Known security issue tied to specific component versions.
 | `fixed_versions` | Component versions where the vulnerability is resolved |
 | `references` | Links to advisories and patches |
 
-CVSS score → always use `cvss_v3`. Xray maintains its own continuously updated DB.
+CVSS score → always use `cvss_v3`.
 
 ## Contextual analysis
 
 Evaluates whether a vulnerability is **actually reachable** in this usage
-context (beyond raw CVE data): invoked code paths, mitigating configs,
-exposure via how the component is used.
+context: invoked code paths, mitigating configs, component exposure.
 
-**Applicability** status drives remediation priority: Critical + not
-applicable ≺ High + confirmed applicable.
-
-Coverage varies by package/vulnerability type — check Xray docs.
+**Applicability** drives remediation priority: Critical + not applicable ≺
+High + confirmed applicable.
 
 ### Response fields: `applicability` vs `applicability_details`
 
@@ -5054,7 +5050,7 @@ Report all eight values as distinct categories — do not merge them.
 ```bash
 jq '[.artifacts[0].issues[] | .applicability_details[]? | .result]
     | group_by(.) | map({result: .[0], count: length})
-    | sort_by(.count) | reverse' /tmp/xray-summary.json
+    | sort_by(.count) | reverse' "${JF_TMP:?}/xray-summary.json"
 ```
 
 For Docker images, the path format is
@@ -5074,7 +5070,7 @@ banned lists enforced via watches and policies.
 
 ## Watches
 
-Central **monitoring config** linking resources to policies.
+**Monitoring config** linking resources to policies.
 
 | Field | Description |
 |-------|-------------|
@@ -5084,14 +5080,13 @@ Central **monitoring config** linking resources to policies.
 | `active` | Whether the watch is enabled |
 | `project_key` | Optional project scope |
 
-Indexed resource change (new artifact, updated component data) → Xray
-re-evaluates watches that include that resource.
+Indexed resource change → Xray re-evaluates its watches.
 
 API: `GET/POST/PUT/DELETE /api/v2/watches`
 
 ## Policies
 
-**Rules** Xray evaluates against components in watched resources.
+**Rules** evaluated against watched components.
 
 | Policy type | Rule evaluates | Common conditions |
 |-------------|---------------|-------------------|
@@ -5107,7 +5102,7 @@ API: `GET/POST/PUT/DELETE /api/v2/policies`
 
 ## Violations
 
-Generated when a watched component matches a policy rule.
+Generated when a watched component matches a rule.
 
 | Field | Description |
 |-------|-------------|
@@ -5210,7 +5205,7 @@ Scope by: **Vulnerability** (CVE / Xray ID), **Component**, **Artifact**,
 
 API: `GET/POST/DELETE /api/v1/ignore_rules`
 
-**Version note:** Ignore rules are **v1 only**. `/api/v2/ignore_rules` → 404.
+Ignore rules are **v1 only**; `/api/v2/ignore_rules` → 404.
 
 ## Summary APIs
 
@@ -5223,8 +5218,7 @@ artifacts. Use **only for security/compliance queries**.
 - Unsure if indexed → try component summary first (works if component is in Xray DB)
 
 **Prerequisite — Xray indexing:** Data only if the repo is indexed **and**
-Xray has scanned the artifact. Artifact may exist in Artifactory while Xray
-knows nothing (repo not marked for indexing, or not yet processed). Empty
+Xray has scanned the artifact. Empty
 results ≠ clean — means no Xray data. Report possibly not indexed; do not
 declare vulnerability-free.
 
@@ -5232,10 +5226,8 @@ declare vulnerability-free.
 
 **v1 only — no `/api/v2/summary/component`.** v2 → 404.
 
-Query by component ID. Returns `issues[]`, `licenses[]`,
-`operational_risks[]` per component. Use when you know the package version
-but not the Artifactory path, or when the repo is not indexed (artifact
-summary would be empty).
+Query by component ID; returns `issues[]`, `licenses[]`,
+`operational_risks[]` per component.
 
 Body uses `component_details` (array of `{component_id}`), **not**
 `component_ids`.
@@ -5388,9 +5380,8 @@ jf api "/xray/api/v2/search/impactedResources?vulnerability=CVE-2021-23337&limit
 
 ## Exposures (Advanced Security)
 
-Actionable findings from JFrog Advanced Security beyond CVE scanning:
-hard-coded secrets, insecure IaC, service misconfigs — real exploitable
-threats in binaries, source, and configs (vs theoretical CVEs).
+Advanced Security findings beyond CVEs: hard-coded secrets, insecure IaC,
+service misconfigs in binaries, source, and configs.
 
 Requires **JFrog Advanced Security** enabled. Artifact must be in an indexed
 repo and already scanned.
@@ -5473,14 +5464,15 @@ jf api "/xray/api/v1/services/results?repo=docker-local&path=my-service/1.0/mani
 
 ### Paginating exposure results
 
+`page_num` starts at **1**. Non-zero exit or empty `.data` → stop. Cap **20 pages**.
+
 ```bash
 PAGE=1
-while true; do
-  RESP=$(jf api "/xray/api/v1/secrets/results?repo=my-repo&path=my-artifact&page_num=$PAGE&num_of_rows=100")
-  echo "$RESP" | jq '.data[]'
-  TOTAL=$(echo "$RESP" | jq '.total_count')
-  COUNT=$(echo "$RESP" | jq '.data | length')
-  [ "$COUNT" -eq 0 ] && break
+MAX_PAGES=20
+while [ "$PAGE" -le "$MAX_PAGES" ]; do
+  if ! jf api "/xray/api/v1/secrets/results?repo=my-repo&path=my-artifact&page_num=$PAGE&num_of_rows=100" \
+      > "${JF_TMP:?}/secrets-results.json"; then break; fi
+  jq '.data[]' "${JF_TMP:?}/secrets-results.json"
   PAGE=$((PAGE + 1))
 done
 ```
@@ -5497,12 +5489,11 @@ Unknown paths → discover with AQL, then fan out to exposures.
 **Docker repos** — find all manifests:
 
 ```bash
-OUT=/tmp/manifests-$$.json
+OUT="${JF_TMP:?}/manifests.json"
 jf api /artifactory/api/search/aql \
   -X POST -H "Content-Type: text/plain" \
   -d 'items.find({"repo":"my-docker-local","name":"manifest.json","path":{"$nmatch":"*_uploads*"}}).include("repo","path","name")' \
   > "$OUT"
-echo "$OUT"
 jq -r '.results[] | .path + "/" + .name' "$OUT"
 ```
 
@@ -5599,8 +5590,8 @@ policy that affected the decision (blocking, bypassed, waived).
 
 ### Pagination
 
-`offset` + `num_of_rows`. `meta.next_offset` → next page. First request:
-`include_total=true` for total event count.
+`offset` + `num_of_rows`. First page **`offset=0`** (never `offset=`).
+Advance only when `next_offset` is an integer **greater than** last offset. Cap 20 pages.
 
 ### Common use cases
 
@@ -5623,3 +5614,25 @@ On-demand scoped analysis, async.
 
 Scope: repos, builds, release bundles, or projects.
 `POST /api/v1/reports/{type}` → retrieve after completion.
+
+
+## xray-sast-scan
+
+# SAST scan (`jf audit --sast`)
+
+Source-code SAST only; needs JFrog Advanced Security. Local secrets / IaC:
+`jf audit --secrets` / `--iac`; stored-artifact results → `xray-entities.md`.
+
+```bash
+jf audit --sast --server-id <SID>
+```
+
+Scans the working directory; if blocked, request approval, never another
+scanner.
+
+- `401` → re-login same server; `403` → permissions; never switch servers.
+- Not entitled / JAS unavailable → check Advanced Security on `<SID>`.
+- Error before results → quote it, stop; error after results → report them, quote it.
+
+Report by severity (Critical, High, Medium, Low): rule / type, `file:line`,
+why exploitable.
