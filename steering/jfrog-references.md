@@ -2114,15 +2114,13 @@ If the user prefers **Markdown** only, follow normal project conventions; apply 
 
 ## Minimum version for skills
 
-Skills that call `jf api` require JFrog CLI **2.100.0** or later. On an older CLI
-`jf api` is an unknown command, so the login flow stops as a prerequisite failure
-rather than reaching the platform. Web login itself needs **2.86.0** or later.
-
-Check with `jf --version`, and upgrade below that floor using the steps below.
+Skills that call `jf api` need JFrog CLI **2.100.0** or later; on an older CLI
+`jf api` is an unknown command and the login flow stops. Web login itself needs
+**2.86.0** or later. Check with `jf --version`; upgrade below that floor.
 
 ## Installing the JFrog CLI
 
-If `jf` is not installed (environment check exits with code 2), guide the user:
+If `jf` is missing (environment check exit 2), guide the user:
 
 ```bash
 # macOS
@@ -2132,26 +2130,29 @@ brew install jfrog-cli
 curl -fL https://install-cli.jfrog.io | sh
 ```
 
-After installation, run `jf --version` to confirm, then
-`bash ~/.kiro/jfrog-scripts/jfrog/check-environment.sh <model-slug> --force`.
+Then run `jf --version` and
+`node ~/.kiro/jfrog-scripts/jfrog/check-environment.mjs <model-slug> --force` (no Node:
+`bash …/check-environment.sh <model-slug> --force`).
 
 ## Upgrading the JFrog CLI
 
 On `NEWER_AVAILABLE`, run
-`bash ~/.kiro/jfrog-scripts/jfrog/cli-newer-version-offer.sh --clear` immediately.
-Never interrupt the task: finish the user's task first, then offer the upgrade
-as the last line of the reply. Upgrade only after the user says Yes:
+`node ~/.kiro/jfrog-scripts/jfrog/cli-newer-version-offer.mjs --clear` (no Node 18+:
+`bash …/cli-newer-version-offer.sh --clear`) immediately.
+Never interrupt: finish the user's task first, then offer the upgrade as the
+last line of the reply. Upgrade only after the user says Yes:
 
 ```bash
 # macOS
 brew upgrade jfrog-cli
 
-# Linux / generic (reinstall)
+# Linux / generic
 curl -fL https://install-cli.jfrog.io | sh
 ```
 
-After upgrading, run `jf --version` to confirm, then
-`bash ~/.kiro/jfrog-scripts/jfrog/check-environment.sh <model-slug> --force`.
+Then run `jf --version` and
+`node ~/.kiro/jfrog-scripts/jfrog/check-environment.mjs <model-slug> --force` (no Node:
+`bash …/check-environment.sh <model-slug> --force`).
 
 
 ## jfrog-entity-index
