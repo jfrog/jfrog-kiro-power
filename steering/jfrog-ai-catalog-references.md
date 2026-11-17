@@ -16,14 +16,14 @@ List-all and versions go through the **Agent Guard**.
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-agent-plugins --project "<PROJECT>" [--name <PATTERN>] [--server "<SID>"] [--page-size <N>] [--cursor <C>] [--format json]
+  --list-agent-plugins --project "<PROJECT>" [--name <PATTERN>] --server "<SERVER_ID>" [--page-size <N>] [--cursor <C>] [--format json]
 ```
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--project <PROJECT>` | **Yes** | AI Catalog project to list. |
+| `--project <PROJECT>` | **Yes** | AI Governance project to list. |
 | `--name <PATTERN>` | No | Find plugins by name: server-side, case-insensitive substring, scoped to the project. |
-| `--server <SID>` | No | jf CLI config entry to authenticate with (defaults to the resolved single server). |
+| `--server <SERVER_ID>` | **Yes** | The AI Governance server (its jf CLI server ID). |
 | `--page-size <N>` | No | Results per page. Pass `50` to stay bounded. The Agent Guard defaults to 500 if omitted. |
 | `--cursor <C>` | No | Continuation cursor from a previous page's JSON, to fetch the next page. |
 | `--format json` | No | Raw page JSON instead of the default compact TSV (name + last-updated). |
@@ -55,7 +55,7 @@ repo-scoped (Artifactory registry contents), unlike `--list-agent-plugins`, whic
 project-scoped:
 
 ```bash
-jf agent plugins list --repo "<repo>" --server-id "<SID>" --format json
+jf agent plugins list --repo "<repo>" --server-id "<SERVER_ID>" --format json
 ```
 
 Never run a bare `jf agent plugins list` (it errors): always pass `--repo <key>` here, or
@@ -80,7 +80,7 @@ line instead:
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-agent-plugin-versions --project "<PROJECT>" --agent-plugin "<slug>" [--server "<SID>"] [--page-size <N>] [--cursor <C>] [--format json]
+  --list-agent-plugin-versions --project "<PROJECT>" --agent-plugin "<slug>" --server "<SERVER_ID>" [--page-size <N>] [--cursor <C>] [--format json]
 # JSON: versions[].version, versions[].locations[].repoKey (page through with cursor like above)
 ```
 
@@ -110,15 +110,15 @@ path — see *List a repo's skills* for when it's appropriate to use.
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skills --project "<PROJECT>" --allowed-only [--name <PATTERN>] [--server "<SID>"] [--page-size <N>] [--cursor <C>] --format json
+  --list-skills --project "<PROJECT>" --allowed-only [--name <PATTERN>] --server "<SERVER_ID>" [--page-size <N>] [--cursor <C>] --format json
 ```
 
 | Flag | Required | Purpose |
 |------|----------|---------|
-| `--project <PROJECT>` | **Yes** | AI Catalog project to list. |
+| `--project <PROJECT>` | **Yes** | AI Governance project to list. |
 | `--allowed-only` | **Yes** | Limit results to skills allowed by project policy. Never omit it. |
 | `--name <PATTERN>` | No | Find skills by name: server-side, case-insensitive substring, scoped to the project. |
-| `--server <SID>` | No | jf CLI config entry to authenticate with (defaults to the resolved single server). |
+| `--server <SERVER_ID>` | **Yes** | The AI Governance server (its jf CLI server ID). |
 | `--page-size <N>` | No | Results per page. Pass `50` to stay bounded. The Agent Guard defaults to 500 if omitted. |
 | `--cursor <C>` | No | Continuation cursor from a previous page's JSON, to fetch the next page. |
 | `--format json` | **Yes** | Raw page JSON used to render the result. |
@@ -167,7 +167,7 @@ repo-scoped (Artifactory registry contents), unlike `--list-skills`, which is
 project-scoped:
 
 ```bash
-jf skills list --repo "<repo>" --server-id "<SID>" --format json
+jf skills list --repo "<repo>" --server-id "<SERVER_ID>" --format json
 ```
 
 Never run a bare `jf skills list` (it errors): always pass `--repo <key>` here, or
@@ -201,7 +201,7 @@ same result" means the one fully-paged, merged result, not a single HTTP call.
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only [--server "<SID>"] [--cursor <C>] --format json
+  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only --server "<SERVER_ID>" [--cursor <C>] --format json
 # JSON: versions[].version, versions[].locations[].repoKey, versions[].locations[].allowStatus, exhausted, cursor
 ```
 
@@ -283,11 +283,11 @@ Install by **slug** (the registry `slug`/`name`, never a display name). Latest
 version is used by default, and the user may pass an explicit version.
 **The `jf agent plugins install` command takes no project.** Resolving which repo hosts
 the slug uses `--list-agent-plugin-versions` (below), which does require `--project`, so
-use `<PROJECT>` resolved at session start (see SKILL.md Prerequisites).
+use the AI Governance project `<PROJECT>` (see SKILL.md Prerequisites).
 
 ```bash
 jf agent plugins install "<slug>" \
-  --server-id "<SID>" \
+  --server-id "<SERVER_ID>" \
   --version "latest" \
   --repo "<repo>" \
   --harness "<harness>" \
@@ -333,7 +333,7 @@ up where the slug is hosted with the Agent Guard:
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-agent-plugin-versions --project "<PROJECT>" --agent-plugin "<slug>" [--server "<SID>"] --format json
+  --list-agent-plugin-versions --project "<PROJECT>" --agent-plugin "<slug>" --server "<SERVER_ID>" --format json
 # read versions[].version and versions[].locations[].repoKey
 ```
 
@@ -368,7 +368,7 @@ After install, confirm the slug shows up as installed — don't guess where
 the source of truth for what's actually installed:
 
 ```bash
-jf agent plugins list --server-id "<SID>" --harness "<harness>" --format json \
+jf agent plugins list --server-id "<SERVER_ID>" --harness "<harness>" --format json \
   | jq -e --arg slug "<slug>" '.[] | select(.name == $slug)' >/dev/null \
   && echo "installed" || echo "MISSING from installed list"
 ```
@@ -386,13 +386,13 @@ To upgrade an installed plugin to a newer version, use the CLI (it re-downloads
 and reinstalls in place):
 
 ```bash
-jf agent plugins update --slug "<slug>" --server-id "<SID>" --harness "<harness>" --version "latest" --quiet
+jf agent plugins update --slug "<slug>" --server-id "<SERVER_ID>" --harness "<harness>" --version "latest" --quiet
 # Preview without touching Artifactory:
-jf agent plugins update --slug "<slug>" --server-id "<SID>" --harness "<harness>" --dry-run
+jf agent plugins update --slug "<slug>" --server-id "<SERVER_ID>" --harness "<harness>" --dry-run
 # Reinstall even if already at the target version:
-jf agent plugins update --slug "<slug>" --server-id "<SID>" --harness "<harness>" --force --quiet
+jf agent plugins update --slug "<slug>" --server-id "<SERVER_ID>" --harness "<harness>" --force --quiet
 # Update all installed plugins at once:
-jf agent plugins update --all --server-id "<SID>" --harness "<harness>" --quiet
+jf agent plugins update --all --server-id "<SERVER_ID>" --harness "<harness>" --quiet
 ```
 
 Note: unlike `jf skills update`, the slug is passed as `--slug <slug>` (a named
@@ -437,16 +437,17 @@ target is already installed, so its repo is fixed — not automatically by
 `jf`, but by reading it back from that install's own record (see *Update an
 installed skill* below) — and `allowStatus` is a per-repo fact, not
 per-version, so every version in that already-allowed repo is equally
-allowed. "Latest version in this specific, already-resolved repo" carries
+allowed — once update has confirmed that repo is still in the `--allowed-only`
+listing. "Latest version in this specific, already-resolved repo" carries
 none of the version/repo ambiguity this rule exists to prevent.
 
 **The `jf skills install` command takes no project.** Resolving which repo hosts
 the slug uses `--list-skill-versions` (below), which does require `--project`, so
-use `<PROJECT>` resolved at session start (see SKILL.md Prerequisites).
+use the AI Governance project `<PROJECT>` (see SKILL.md Prerequisites).
 
 ```bash
 jf skills install "<slug>" \
-  --server-id "<SID>" \
+  --server-id "<SERVER_ID>" \
   --version "<version>" \
   --repo "<repo>" \
   --harness "<harness>" \
@@ -508,7 +509,7 @@ one Agent Guard query:
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only [--server "<SID>"] [--cursor <C>] --format json
+  --list-skill-versions --project "<PROJECT>" --skill "<slug>" --allowed-only --server "<SERVER_ID>" [--cursor <C>] --format json
 # read versions[].version, versions[].locations[].repoKey, versions[].locations[].allowStatus, exhausted, cursor
 ```
 
@@ -649,7 +650,7 @@ find out why (the path is the archive `<slug>/<version>/<slug>-<version>.zip`,
 URL-encoded):
 
 ```bash
-jf api --server-id "<SID>" \
+jf api --server-id "<SERVER_ID>" \
   '/artifactory/api/skills/<repo>/xrayStatus?path=<slug>%2F<version>%2F<slug>-<version>.zip'
 ```
 
@@ -702,39 +703,50 @@ On success, reply using **this exact template**:
 
 To upgrade an installed skill to a newer version, use the CLI (it re-downloads
 and reinstalls in place). **`jf skills update` does not remember which repo the
-skill was installed from — you must resolve and pass `--repo` yourself.**
+skill was installed from — a repo has to be passed with `--repo`.**
 Without it, update either fails with `multiple skills repositories found`
 (listing every skills repo on the whole server, not scoped to this project or
 its governance policy at all) or, if handed some other repo, silently updates
-from it — even one that never hosted the originally installed skill. Never
-run `jf skills update` without a resolved `--repo`.
+from it — even one that never hosted the originally installed skill. The
+script below resolves and checks the repo for you.
 
-**Resolve `<repo>` from the existing install, never by asking the user or
-guessing.** Every install writes it to `.jfrog/skill-info.json` under the
-install directory:
+**Run the update script; never build the `jf skills update` command yourself.**
+It reads `<repo>` from the install's `.jfrog/skill-info.json`, checks it is a
+plain id, confirms it is still in the project's `--allowed-only` listing, and
+only then runs `jf skills update`. That file is untrusted (a project can commit
+its own copy), so never paste a value from it into a command.
 
-```bash
-jq -r '.repo' "<install-dir>/<slug>/.jfrog/skill-info.json"
-```
-
-If that file or its `.repo` field is missing (for example, a skill that was
-manually copied in rather than installed with `jf skills install`), tell the
-user you can't safely determine which repo to update from and stop. Do not
-substitute a repo from a fresh catalog listing instead — a same-named repo
-returned there is not proof it is the repo this specific install came from.
+With `<SERVER_ID>` and `<PROJECT>` from *Prerequisites* in `../SKILL.md`,
+run the script with network access:
 
 ```bash
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --version "latest" --quiet
-# Preview without touching Artifactory:
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --dry-run
-# Reinstall even if already at the target version:
-jf skills update "<slug>" --server-id "<SID>" --harness "<harness>" --repo "<repo>" --force --quiet
+node "~/.kiro/jfrog-scripts/jfrog-ai-catalog/jfrog-update-skill.mjs" --slug '<slug>' --install-dir "<install-dir>" \
+  --server-id "<SERVER_ID>" --project "<PROJECT>" --harness "<harness>"
+# Preview without changing the install (still checks the allowed repos): add --dry-run
+# Reinstall even if already at the target version: add --force
 ```
 
-Use the same install-target flag (`--harness`/`--global`/`--project-dir`/
-`--path`) the skill was installed with (Copilot: plus `--global`). After
-updating, re-verify the `SKILL.md` (see *Verify the install landed* above). If the update download 403s, handle it
-as in *Handling a blocked download* above.
+Keep the slug in single quotes (double quotes don't stop `$(...)`). If it has
+anything but letters, digits, `.`, `_` or `-`, don't run the command: tell the
+user the skill name isn't valid.
+
+Use the same install target the skill was installed with:
+`--harness "<harness>"`, `--global`, `--project-dir "<dir>"` or `--path "<dir>"`
+(`--harness` can be combined with `--global`, as Copilot does, or with
+`--project-dir`). Always invoke via `node <path>`.
+
+Handle the exit code:
+
+- **0** — updated. Re-verify the `SKILL.md` (see *Verify the install landed*
+  above) and reply with the template below.
+- **3** — refused (the repo is missing or unsafe, or is no longer
+  governance-allowed). Show the single stderr line **verbatim** and stop. Do not
+  retry, and do not pick a repo from the catalog listing instead — a same-named
+  repo returned there is not proof it is the repo this install came from.
+- **1** — failed. If the download 403s, handle it as in *Handling a blocked
+  download* above, using the repo the script printed (`Updating from repo: …`)
+  and the version from `jf`'s `Using latest version: <version>` line; otherwise report the error line.
+- **2** — usage error: a bug in how the script was invoked.
 
 On success, reply using **this exact template**:
 
@@ -772,16 +784,16 @@ say to the user, the same way the rest of this skill never surfaces
 ## List the policies
 
 The query, auto-pagination, and error-scrubbing are **all owned by a bundled
-script** — this is fully deterministic once `<PROJECT>` and `<SID>` are
+script** — this is fully deterministic once `<PROJECT>` and `<SERVER_ID>` are
 known, so none of it is left to be reconstructed freehand each time.
 Presentation is not: the script hands back structured data, and you build
 the response.
 
-Resolve `<PROJECT>` per **Resolve the project** in `../SKILL.md`'s
-Prerequisites (never assume `default`, never invent one), then run:
+With `<SERVER_ID>` and `<PROJECT>` from *Prerequisites* in `../SKILL.md` (never
+assume `default`, never invent one), run:
 
 ```bash
-node ~/.kiro/jfrog-scripts/jfrog-ai-catalog/list-skill-policies.mjs --project "<PROJECT>" --server-id "<SID>"
+node ~/.kiro/jfrog-scripts/jfrog-ai-catalog/list-skill-policies.mjs --project "<PROJECT>" --server-id "<SERVER_ID>"
 ```
 
 Always invoke via `node <path>` — never execute the file directly.
@@ -857,11 +869,11 @@ present the union, not just the first:
 
 ```bash
 # Project/harness install (the default target)
-jf agent plugins list --server-id "<SID>" --harness "<harness>" --format json
+jf agent plugins list --server-id "<SERVER_ID>" --harness "<harness>" --format json
 # Global install (a separate location, always check it too)
-jf agent plugins list --server-id "<SID>" --harness "<harness>" --global --format json
+jf agent plugins list --server-id "<SERVER_ID>" --harness "<harness>" --global --format json
 # Add --check-updates to compare installed versions against the registry
-jf agent plugins list --server-id "<SID>" --harness "<harness>" --check-updates
+jf agent plugins list --server-id "<SERVER_ID>" --harness "<harness>" --check-updates
 ```
 
 Resolve `<harness>` to the current agent (see `installing-plugins.md`).
@@ -964,11 +976,11 @@ present the union, not just the first:
 
 ```bash
 # Project/harness install (the default target)
-jf skills list --server-id "<SID>" --harness "<harness>" --format json
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --format json
 # Global install (a separate location, always check it too)
-jf skills list --server-id "<SID>" --harness "<harness>" --global --format json
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --global --format json
 # Add --check-updates to compare installed versions against the registry
-jf skills list --server-id "<SID>" --harness "<harness>" --check-updates
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --check-updates
 ```
 
 Resolve `<harness>` to the current agent (see `installing-skills.md`).
@@ -1005,21 +1017,25 @@ skill, see *Update an installed skill* in `installing-skills.md`.
 ## Remove a skill
 
 "Remove" defaults to removing the **locally installed** skill. There is no
-`jf skills uninstall`. Delete the installed skill directory after confirming it
-exists:
-
-```bash
-if [ -d "<install-dir>/<slug>" ]; then
-  rm -rf "<install-dir>/<slug>"
-else
-  echo "Not installed, nothing to remove"
-fi
-```
+`jf skills uninstall`.
 
 **Confirm before deleting.** Show exactly what will be removed using **this exact
 template** and wait for an explicit "yes":
 
 > Removing skill `<slug>` deletes its local install from `<harness>`. Do you want to remove it?
+
+Only after the "yes", delete the installed skill directory with the script (it
+rejects a slug that isn't a plain name):
+
+```bash
+node "~/.kiro/jfrog-scripts/jfrog-ai-catalog/jfrog-remove-skill.mjs" --slug '<slug>' --install-dir "<install-dir>"
+```
+
+Keep the slug in single quotes (double quotes don't stop `$(...)`). If it has
+anything but letters, digits, `.`, `_` or `-`, don't run the command: tell the
+user the skill name isn't valid.
+
+On exit `1` or `3`, show its stderr line verbatim and stop. On `2`, fix the call.
 
 On success, reply using **this exact template**:
 
@@ -1055,12 +1071,12 @@ in this order:
 
 2. **No repo given. Provision the project's plugins repository.** Use Agent
    Guard to create (or resolve, if it already exists) the project's local plugins
-   repo, then publish to the returned key. This needs `<PROJECT>` (resolve it per
-   *Prerequisites* in `../SKILL.md`, asking only if it is unknown):
+   repo, then publish to the returned key. This needs `<PROJECT>` (see
+   *Prerequisites* in `../SKILL.md`):
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --provision-agent-plugins-repository --project "<PROJECT>" [--server "<SID>"] [--format json]
+  --provision-agent-plugins-repository --project "<PROJECT>" --server "<SERVER_ID>" [--format json]
 ```
 
    It prints the bare repo key (or `{"repoKey":"<repo>"}` with `--format json`).
@@ -1076,14 +1092,14 @@ npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
 
 ```bash
 jf api '/artifactory/api/repositories?packageType=plugins&type=local' \
-  --server-id "<SID>" 2>/dev/null | jq -r '.[].key'
+  --server-id "<SERVER_ID>" 2>/dev/null | jq -r '.[].key'
 ```
 
    Then **wait for the user to pick one** (by name). If the command printed one or
    more repos, reply in **this exact format**, sorted by name, one row per key, and
    nothing else:
 
-   Provisioning a plugins repository for project `<project>` on `<SID>` failed, so
+   Provisioning a plugins repository for project `<project>` on `<SERVER_ID>` failed, so
    pick an existing repository to publish `<slug>` to:
 
    | Repository |
@@ -1093,7 +1109,7 @@ jf api '/artifactory/api/repositories?packageType=plugins&type=local' \
    If the command printed nothing (no plugins repos on the server), reply with one
    line instead, filling `<reason>` with the provisioning error:
 
-   > No plugins repositories on `<SID>` to publish to (provisioning failed: `<reason>`). Tell me a repository to use, or ask me to retry.
+   > No plugins repositories on `<SERVER_ID>` to publish to (provisioning failed: `<reason>`). Tell me a repository to use, or ask me to retry.
 
    **Never auto-select a repo, even if one exists whose name matches the
    project.** A name match is not consent. Do not publish to any repo the user did
@@ -1145,7 +1161,7 @@ To generate a key pair and register its public key in one step:
 
 ```bash
 jf evd gen-keys --key-alias "<alias>" \
-  --key-file-path "<dir>" --server-id "<SID>"
+  --key-file-path "<dir>" --server-id "<SERVER_ID>"
 # writes <dir>/evidence.key (private) + <dir>/evidence.pub, uploads the
 # public key as a trusted key under <alias>
 ```
@@ -1160,7 +1176,7 @@ Once `<repo>` is resolved and the bundle validated, **show the user what will be
 published and wait for an explicit confirmation**. Reply using this exact template
 and do not run `jf agent plugins publish` until the user agrees:
 
-  > Publishing plugin `<slug>` uploads it to repository `<repo>` on server `<SID>`. Do you want to publish it?
+  > Publishing plugin `<slug>` uploads it to repository `<repo>` on server `<SERVER_ID>`. Do you want to publish it?
 
 Never combine this final confirmation step with the previous signing step into one prompt.
 
@@ -1179,7 +1195,7 @@ unsigned.
 
 ```bash
 jf agent plugins publish "<path>" \
-  --server-id "<SID>" \
+  --server-id "<SERVER_ID>" \
   --repo "<repo>" \
   --quiet \
   [--version "<semver>"] \
@@ -1210,7 +1226,7 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
 
 | Option | Action |
 |--------|--------|
-| **Overwrite** | Run `jf agent plugins delete "<slug>" --version "<v>" --repo "<repo>" --server-id "<SID>"`, then re-run the publish unchanged. |
+| **Overwrite** | Run `jf agent plugins delete "<slug>" --version "<v>" --repo "<repo>" --server-id "<SERVER_ID>"`, then re-run the publish unchanged. |
 | **Publish as a new version** | Re-run the publish with `--version <new>` (the user's semver, or `<next>`). |
 | **Abort** | Stop and report that nothing was published. |
 
@@ -1218,12 +1234,12 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
 
 - **Success.** Reply using **this exact template**:
 
-  > Published `<slug>@<version>` to `<repo>` on `<SID>`.
+  > Published `<slug>@<version>` to `<repo>` on `<SERVER_ID>`.
 
 - **Other failure.** Reply using **this exact template**, quoting the CLI error
   verbatim in `<cli-error>`:
 
-  > Publishing `<slug>` to `<repo>` on `<SID>` failed: `<cli-error>`.
+  > Publishing `<slug>` to `<repo>` on `<SERVER_ID>` failed: `<cli-error>`.
 
   On 401/403/404, follow the stop-on-error rule from the base `jfrog` skill
   (see *Prerequisites* in `../SKILL.md`): stop and do not retry against a
@@ -1267,12 +1283,12 @@ order:
 
 2. **No repo given. Provision the project's skills repository.** Use Agent
    Guard to create (or resolve, if it already exists) the project's local skills
-   repo, then publish to the returned key. This needs `<PROJECT>` (resolve it per
-   *Prerequisites* in `../SKILL.md`, asking only if it is unknown):
+   repo, then publish to the returned key. This needs `<PROJECT>` (see
+   *Prerequisites* in `../SKILL.md`):
 
 ```bash
 npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
-  --provision-skills-repository --project "<PROJECT>" [--server "<SID>"] [--format json]
+  --provision-skills-repository --project "<PROJECT>" --server "<SERVER_ID>" [--format json]
 ```
 
    It prints the bare repo key (or `{"repoKey":"<repo>"}` with `--format json`).
@@ -1284,26 +1300,25 @@ npx --yes --registry <REGISTRY_URL> @jfrog/agent-guard \
    retry in a loop. Publishing is mutating, so you must get an explicit repo from
    the user here. This is the one case where you do ask before publishing.
 
-   First list the existing skills repos. When `<PROJECT>` is known, scope the
-   list to that project so you offer only its repositories; fall back to the
-   server-wide list only when the project is unknown or the project-scoped list
-   comes back empty:
+   First list the existing skills repos. Scope the list to `<PROJECT>` so you
+   offer only its repositories; fall back to the server-wide list only when the
+   project-scoped list comes back empty:
 
 ```bash
-# project-scoped (preferred when <PROJECT> is known)
+# project-scoped
 jf api '/artifactory/api/repositories?packageType=skills&type=local&project=<PROJECT>' \
-  --server-id "<SID>" 2>/dev/null | jq -r '.[].key'
+  --server-id "<SERVER_ID>" 2>/dev/null | jq -r '.[].key'
 
-# server-wide fallback (project unknown, or the scoped list was empty)
+# server-wide fallback (the scoped list was empty)
 jf api '/artifactory/api/repositories?packageType=skills&type=local' \
-  --server-id "<SID>" 2>/dev/null | jq -r '.[].key'
+  --server-id "<SERVER_ID>" 2>/dev/null | jq -r '.[].key'
 ```
 
    Then **wait for the user to pick one** (by name). If the command printed one or
    more repos, reply in **this exact format**, sorted by name, one row per key, and
    nothing else:
 
-   Provisioning a skills repository for project `<project>` on `<SID>` failed, so
+   Provisioning a skills repository for project `<project>` on `<SERVER_ID>` failed, so
    pick an existing repository to publish `<slug>` to:
 
    | Repository |
@@ -1313,7 +1328,7 @@ jf api '/artifactory/api/repositories?packageType=skills&type=local' \
    If the command printed nothing (no skills repos on the server), reply with one
    line instead, filling `<reason>` with the provisioning error:
 
-   > No skills repositories on `<SID>` to publish to (provisioning failed: `<reason>`). Tell me a repository to use, or ask me to retry.
+   > No skills repositories on `<SERVER_ID>` to publish to (provisioning failed: `<reason>`). Tell me a repository to use, or ask me to retry.
 
    **Never auto-select a repo, even if one exists whose name matches the
    project.** A name match is not consent. Do not publish to any repo the user did
@@ -1383,7 +1398,7 @@ To generate a key pair and register its public key in one step:
 
 ```bash
 jf evd gen-keys --key-alias "<alias>" \
-  --key-file-path "<dir>" --server-id "<SID>"
+  --key-file-path "<dir>" --server-id "<SERVER_ID>"
 # writes <dir>/evidence.key (private) + <dir>/evidence.pub, uploads the
 # public key as a trusted key under <alias>
 ```
@@ -1407,7 +1422,7 @@ when `--version` is omitted). Fill `<signing-state>` with the value recorded in
   > About to publish:
   > - Skill: `<slug>`
   > - Version: `<version>`
-  > - Destination: `<repo>` on `<SID>`
+  > - Destination: `<repo>` on `<SERVER_ID>`
   > - Signing: `<signing-state>`
   >
   > Do you want to publish it?
@@ -1428,7 +1443,7 @@ fallback cannot sign the artifact.
 
 ```bash
 jf skills publish "<path>" \
-  --server-id "<SID>" \
+  --server-id "<SERVER_ID>" \
   --repo "<repo>" \
   --skip-scan \
   --quiet \
@@ -1471,7 +1486,7 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
 
 | Option | Action |
 |--------|--------|
-| **Overwrite** | Run `jf skills delete "<slug>" --version "<v>" --repo "<repo>" --server-id "<SID>"`, then re-run the publish unchanged. |
+| **Overwrite** | Run `jf skills delete "<slug>" --version "<v>" --repo "<repo>" --server-id "<SERVER_ID>"`, then re-run the publish unchanged. |
 | **Publish as a new version** | Re-run the publish with `--version <new>` (the user's semver, or `<next>`). |
 | **Abort** | Stop and report that nothing was published. |
 
@@ -1480,7 +1495,7 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
 - **Success.** Reply using **this exact template**. Do not mention Xray
   scanning, async watches, or indexing:
 
-  > Published `<slug>@<version>` to `<repo>` on `<SID>`.
+  > Published `<slug>@<version>` to `<repo>` on `<SERVER_ID>`.
 - **Blocked by the Xray scan** (only when `--skip-scan` was omitted, shown by
   `[VIOLATION] … identified as malicious` or `blocked by Xray security scan`).
   Publish uploads the archive first, then scans, so on a scan block the artifact
@@ -1488,13 +1503,13 @@ existing version and `<next>` with the next patch (for example `3.0.0` to `3.0.1
   claim it was removed. Verify:
 
 ```bash
-jf api '/artifactory/api/storage/<repo>/<slug>/<version>' --server-id "<SID>"
+jf api '/artifactory/api/storage/<repo>/<slug>/<version>' --server-id "<SERVER_ID>"
 # 200 = still present, 404 = already gone
 ```
 
   If it is still present, tell the user the malicious-flagged artifact remains
   and offer to delete it (`jf skills delete "<slug>" --version "<version>"
-  --repo "<repo>" --server-id "<SID>"`). Treat the malicious flag as a real security signal. Reply
+  --repo "<repo>" --server-id "<SERVER_ID>"`). Treat the malicious flag as a real security signal. Reply
   using **this exact template**:
 
   > Publish of `<slug>@<version>` was **blocked by the Xray scan** (`<violation>`).
@@ -1505,7 +1520,7 @@ jf api '/artifactory/api/storage/<repo>/<slug>/<version>' --server-id "<SID>"
 - **Other failure.** Reply using **this exact template**, quoting the CLI error
   verbatim in `<cli-error>`:
 
-  > Publishing `<slug>` to `<repo>` on `<SID>` failed: `<cli-error>`.
+  > Publishing `<slug>` to `<repo>` on `<SERVER_ID>` failed: `<cli-error>`.
 
   On 401/403/404, follow the stop-on-error rule from the base `jfrog` skill
   (see *Prerequisites* in `../SKILL.md`): stop and do not retry against a

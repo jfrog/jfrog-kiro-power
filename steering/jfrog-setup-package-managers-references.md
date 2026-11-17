@@ -56,7 +56,8 @@ pruning, the file cannot.
 ```
 
 Each `servers.<serverId>` entry holds `repositories`, `cached_at`, `source`, and
-`agentsConfigMtimeMs` (mtime of `~/.jfrog/agents-conf.json` at last refresh).
+`agentsConfigMtimeMs` (mtime of `~/.jfrog/agents-conf.json` at last refresh),
+plus an optional `unresolved` map when a configured key failed verification.
 The workspace binding file at
 [`.jfrog/local/package-resolution.json`](workspace-binding.md) holds
 only `repositories`. The map key **is** the `serverId`.
@@ -68,6 +69,7 @@ only `repositories`. The map key **is** the `serverId`.
 | `servers.<serverId>.cached_at` | ISO-8601 timestamp of the last refresh. TTL from `packageResolution.cacheTtlDays` in agents-conf.json (default 7). |
 | `servers.<serverId>.agentsConfigMtimeMs` | Invalidates cache when `~/.jfrog/agents-conf.json` changes. |
 | `servers.<serverId>.source` | `verified` = keys from agents-conf.json checked via `GET /api/repositories/{key}`; `agents-config` = trusted without HTTP (`verifyRepos: false`). |
+| `servers.<serverId>.unresolved.<pkgType>` | Optional. `{ "repoKey", "cause" }` for a configured key that failed verification (`not-found`, `package-type-mismatch`, `http-403`, `unreachable`, …). An entry with a failed key is re-checked after 1 hour, not after `cacheTtlDays`. Read-only for this skill — see [Broken global repo key](../SKILL.md#broken-global-repo-key-blocked). |
 
 Package type keys used in the file are `npm`, `pypi`, `maven`, `gradle`, `go`,
 `docker`, `helm`, `nuget`. Note `pypi` (not `pip`) — same convention the
@@ -296,10 +298,19 @@ Before setup, **read** the file (if it exists). For each package manager in the
 to-bind set, map it to a package type and compare
 `repositories.<type>` against what the resolver chose in Step 2:
 
+> **Eager APR exception:** When the session status says the package manager
+> is `already set up` or `setting up in the background`, do not invoke this skill
+> proactively just because this file has no matching type. For `already set up`,
+> use the normal package-manager command. For `setting up in the background`,
+> follow the session policy's direct-rewrite instruction and do not start a
+> second `jf setup`. Still apply the table below for an explicit setup or rebind
+> request, and for recovery from a package-manager 401/403 response from JFrog,
+> including a different repo key (show the diff and confirm).
+
 | Case | Action |
 |---|---|
 | Missing type in `repositories` | Check the repo key, run `jf setup`, and merge in Step 6. |
-| Same repo key | **Skip** `jf setup` — hook already applies overrides on session start. |
+| Same repo key | **Skip** `jf setup` — the hook already applies it. For a 401/403 from JFrog, re-run `jf setup` with this same repo key. |
 | Different repo key | Show diff and confirm via AskQuestion before overwriting. |
 | Value fails `^[A-Za-z0-9._-]+$` | Not the current binding. Do not diff it or pass it through. Stop and ask for a replacement key. Other types in the file stay usable. |
 

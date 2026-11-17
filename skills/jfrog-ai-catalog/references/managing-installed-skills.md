@@ -8,11 +8,11 @@ present the union, not just the first:
 
 ```bash
 # Project/harness install (the default target)
-jf skills list --server-id "<SID>" --harness "<harness>" --format json
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --format json
 # Global install (a separate location, always check it too)
-jf skills list --server-id "<SID>" --harness "<harness>" --global --format json
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --global --format json
 # Add --check-updates to compare installed versions against the registry
-jf skills list --server-id "<SID>" --harness "<harness>" --check-updates
+jf skills list --server-id "<SERVER_ID>" --harness "<harness>" --check-updates
 ```
 
 Resolve `<harness>` to the current agent (see `installing-skills.md`).
@@ -49,21 +49,25 @@ skill, see *Update an installed skill* in `installing-skills.md`.
 ## Remove a skill
 
 "Remove" defaults to removing the **locally installed** skill. There is no
-`jf skills uninstall`. Delete the installed skill directory after confirming it
-exists:
-
-```bash
-if [ -d "<install-dir>/<slug>" ]; then
-  rm -rf "<install-dir>/<slug>"
-else
-  echo "Not installed, nothing to remove"
-fi
-```
+`jf skills uninstall`.
 
 **Confirm before deleting.** Show exactly what will be removed using **this exact
 template** and wait for an explicit "yes":
 
 > Removing skill `<slug>` deletes its local install from `<harness>`. Do you want to remove it?
+
+Only after the "yes", delete the installed skill directory with the script (it
+rejects a slug that isn't a plain name):
+
+```bash
+node "<skill_path>/scripts/jfrog-remove-skill.mjs" --slug '<slug>' --install-dir "<install-dir>"
+```
+
+Keep the slug in single quotes (double quotes don't stop `$(...)`). If it has
+anything but letters, digits, `.`, `_` or `-`, don't run the command: tell the
+user the skill name isn't valid.
+
+On exit `1` or `3`, show its stderr line verbatim and stop. On `2`, fix the call.
 
 On success, reply using **this exact template**:
 
